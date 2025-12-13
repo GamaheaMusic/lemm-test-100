@@ -1557,12 +1557,7 @@ with gr.Blocks(
             # Tab 1: Dataset Training
             with gr.Tab("📚 Dataset Training"):
                 gr.Markdown("### Pre-curated Dataset Training")
-                
-                training_type = gr.Radio(
-                    choices=["Vocal Training", "Symbolic Training"],
-                    value="Vocal Training",
-                    label="Training Type"
-                )
+                gr.Markdown("Select datasets from the categories below. All datasets can be used for music generation training.")
                 
                 with gr.Row():
                     with gr.Column():
