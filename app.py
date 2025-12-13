@@ -887,11 +887,15 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         
         # Map display names to dataset keys
         dataset_map = {
-            "OpenSinger (Multi-singer, 50+ hours)": "opensinger",
-            "M4Singer (Chinese pop, 29 hours)": "m4singer",
-            "CC Mixter (Creative Commons stems)": "ccmixter",
-            "Lakh MIDI (176k files, diverse genres)": "lakh_midi",
-            "Mutopia (Classical, 2000+ pieces)": "mutopia"
+            # Music datasets
+            "GTZAN Music Genre (1000 tracks, 10 genres)": "gtzan",
+            "NSynth Musical Notes (Validation set)": "nsynth_valid",
+            "MAESTRO Piano Performances (subset)": "maestro",
+            # Vocal & Sound datasets
+            "LJSpeech (13k vocal clips, single speaker)": "ljspeech",
+            "Common Voice English (diverse speakers)": "common_voice_en",
+            "ESC-50 Environmental Sounds (2000 samples)": "esc50",
+            "Google Speech Commands (short words)": "speech_commands"
         }
         
         status_messages = []
@@ -1557,26 +1561,28 @@ with gr.Blocks(
                 
                 with gr.Row():
                     with gr.Column():
-                        gr.Markdown("**Vocal Datasets**")
+                        gr.Markdown("**Music Datasets**")
                         vocal_datasets = gr.CheckboxGroup(
                             choices=[
-                                "OpenSinger (Multi-singer, 50+ hours)",
-                                "M4Singer (Chinese pop, 29 hours)",
-                                "CC Mixter (Creative Commons stems)"
+                                "GTZAN Music Genre (1000 tracks, 10 genres)",
+                                "NSynth Musical Notes (Validation set)",
+                                "MAESTRO Piano Performances (subset)"
                             ],
-                            label="Select Vocal Datasets",
-                            info="Check datasets to include in training"
+                            label="Select Music Datasets",
+                            info="Music and instrument datasets for style learning"
                         )
                     
                     with gr.Column():
-                        gr.Markdown("**Symbolic Datasets**")
+                        gr.Markdown("**Vocal & Sound Datasets**")
                         symbolic_datasets = gr.CheckboxGroup(
                             choices=[
-                                "Lakh MIDI (176k files, diverse genres)",
-                                "Mutopia (Classical, 2000+ pieces)"
+                                "LJSpeech (13k vocal clips, single speaker)",
+                                "Common Voice English (diverse speakers)",
+                                "ESC-50 Environmental Sounds (2000 samples)",
+                                "Google Speech Commands (short words)"
                             ],
-                            label="Select Symbolic Datasets",
-                            info="Check datasets to include in training"
+                            label="Select Vocal/Sound Datasets",
+                            info="Vocal and sound effect datasets"
                         )
                 
                 dataset_download_btn = gr.Button("📥 Download & Prepare Datasets", variant="secondary")
