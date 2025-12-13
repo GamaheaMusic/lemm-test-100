@@ -967,6 +967,75 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         logger.error(f"Dataset download failed: {e}", exc_info=True)
         return f"❌ Error: {str(e)}\n\nStacktrace logged to console."
 
+def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
+    """Prepare downloaded datasets for LoRA training by extracting audio files"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        
+        if not selected_datasets:
+            return "❌ No datasets selected. Please check at least one downloaded dataset."
+        
+        dataset_service = DatasetService()
+        
+        status_messages = []
+        status_messages.append(f"🔧 Preparing {len(selected_datasets)} dataset(s) for training...\n")
+        
+        success_count = 0
+        error_count = 0
+        
+        max_samples = int(max_samples_per_dataset) if max_samples_per_dataset > 0 else None
+        
+        for dataset_name in selected_datasets:
+            status_messages.append(f"\n{'='*60}")
+            status_messages.append(f"🔧 Preparing: {dataset_name}")
+            status_messages.append(f"{'='*60}\n")
+            
+            # Progress callback
+            progress_msgs = []
+            def progress_callback(msg):
+                progress_msgs.append(msg)
+            
+            # Prepare dataset
+            result = dataset_service.prepare_dataset_for_training(
+                dataset_name,
+                train_val_split=0.8,
+                max_samples=max_samples,
+                progress_callback=progress_callback
+            )
+            
+            # Add progress messages
+            for msg in progress_msgs:
+                status_messages.append(f"   {msg}")
+            
+            if result.get('success'):
+                if result.get('already_prepared'):
+                    status_messages.append(f"\n   ℹ️ Dataset was already prepared")
+                else:
+                    success_count += 1
+                    status_messages.append(f"\n   ✅ Preparation complete!")
+                    status_messages.append(f"   📊 Training samples: {result.get('num_train', 0)}")
+                    status_messages.append(f"   📊 Validation samples: {result.get('num_val', 0)}")
+            else:
+                error_count += 1
+                status_messages.append(f"\n   ❌ Error: {result.get('error', 'Unknown error')}\n")
+        
+        # Summary
+        status_messages.append(f"\n{'='*60}")
+        status_messages.append(f"Summary:")
+        status_messages.append(f"  ✅ Successfully prepared: {success_count}")
+        status_messages.append(f"  ❌ Errors: {error_count}")
+        status_messages.append(f"{'='*60}")
+        
+        if success_count > 0:
+            status_messages.append(f"\n✅ Datasets are now ready for LoRA training!")
+            status_messages.append(f"💡 Go to 'Training Configuration' tab to start training")
+        
+        return "\n".join(status_messages)
+        
+    except Exception as e:
+        logger.error(f"Dataset preparation failed: {e}", exc_info=True)
+        return f"❌ Error: {str(e)}"
+
 def prepare_user_training_dataset(audio_files, metadata_table, split_clips, separate_stems):
     """Prepare user audio dataset for training"""
     try:
@@ -1590,10 +1659,39 @@ with gr.Blocks(
                             info="Complete vocal and sound datasets"
                         )
                 
-                dataset_download_btn = gr.Button("📥 Download & Prepare Datasets", variant="secondary")
+                dataset_download_btn = gr.Button("📥 Download Datasets", variant="secondary")
                 dataset_status = gr.Textbox(
-                    label="Dataset Status", 
+                    label="Download Status", 
                     lines=15, 
+                    max_lines=25,
+                    interactive=False,
+                    show_copy_button=True
+                )
+                
+                gr.Markdown("---")
+                gr.Markdown("### 🔧 Prepare Downloaded Datasets for Training")
+                gr.Markdown("After downloading, prepare datasets by extracting audio files and creating train/val splits.")
+                
+                prepare_datasets_selector = gr.CheckboxGroup(
+                    choices=["gtzan", "nsynth", "maestro", "million_song", "fma_large", "musiccaps", "audioset_music", 
+                             "ljspeech", "common_voice_en", "librispeech", "esc50", "speech_commands"],
+                    label="Select Downloaded Datasets to Prepare",
+                    info="Only select datasets you've already downloaded above"
+                )
+                
+                max_samples_slider = gr.Slider(
+                    minimum=0,
+                    maximum=10000,
+                    value=1000,
+                    step=100,
+                    label="Max Samples per Dataset (0 = all)",
+                    info="Limit samples to speed up preparation. 0 means process all samples."
+                )
+                
+                prepare_btn = gr.Button("🔧 Prepare Datasets for Training", variant="primary")
+                prepare_status = gr.Textbox(
+                    label="Preparation Status",
+                    lines=15,
                     max_lines=25,
                     interactive=False,
                     show_copy_button=True
@@ -1794,6 +1892,12 @@ with gr.Blocks(
         fn=download_prepare_datasets,
         inputs=[vocal_datasets, symbolic_datasets],
         outputs=[dataset_status]
+    )
+    
+    prepare_btn.click(
+        fn=prepare_datasets_for_training,
+        inputs=[prepare_datasets_selector, max_samples_slider],
+        outputs=[prepare_status]
     )
     
     analyze_audio_btn.click(

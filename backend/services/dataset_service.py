@@ -5,8 +5,9 @@ Downloads curated datasets from HuggingFace for LoRA training
 import os
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +255,203 @@ class DatasetService:
                     progress_callback(f"   💡 Network issue - check your internet connection")
                 elif "permission" in str(e).lower() or "access" in str(e).lower():
                     progress_callback(f"   💡 Dataset may require authentication or have access restrictions")
+                progress_callback(f"❌ {error_msg}")
+            return {
+                'success': False,
+                'error': error_msg,
+                'dataset': dataset_key
+            }
+    
+    def prepare_dataset_for_training(
+        self, 
+        dataset_key: str, 
+        train_val_split: float = 0.8,
+        max_samples: Optional[int] = None,
+        progress_callback: Optional[Callable] = None
+    ) -> Dict:
+        """
+        Prepare a downloaded HuggingFace dataset for LoRA training.
+        Extracts audio files, creates metadata, and splits into train/val sets.
+        
+        Args:
+            dataset_key: Key identifying the dataset (e.g., 'gtzan')
+            train_val_split: Fraction of data to use for training (default: 0.8)
+            max_samples: Maximum number of samples to prepare (None = all)
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            Dictionary with preparation results
+        """
+        try:
+            from datasets import load_from_disk
+            import soundfile as sf
+            import numpy as np
+            
+            if progress_callback:
+                progress_callback(f"🔧 Preparing dataset: {dataset_key}")
+            
+            # Check if dataset exists
+            if dataset_key not in self.DATASETS:
+                raise ValueError(f"Unknown dataset: {dataset_key}")
+            
+            config = self.DATASETS[dataset_key]
+            dataset_dir = self.base_dir / dataset_key
+            cache_dir = dataset_dir / "cache"
+            audio_dir = dataset_dir / "audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Load dataset info
+            metadata_path = dataset_dir / 'dataset_info.json'
+            if not metadata_path.exists():
+                raise ValueError(f"Dataset not downloaded yet. Please download {dataset_key} first.")
+            
+            with open(metadata_path, 'r') as f:
+                dataset_info = json.load(f)
+            
+            if dataset_info.get('prepared'):
+                if progress_callback:
+                    progress_callback(f"✅ Dataset already prepared!")
+                return {'success': True, 'dataset': dataset_key, 'already_prepared': True}
+            
+            # Load HuggingFace dataset from cache
+            if progress_callback:
+                progress_callback(f"📂 Loading dataset from cache...")
+            
+            from datasets import load_dataset
+            hf_id = config['hf_id']
+            load_params = {'path': hf_id, 'cache_dir': str(cache_dir)}
+            if 'config' in config:
+                load_params['name'] = config['config']
+            if 'split' in config:
+                load_params['split'] = config['split']
+                
+            dataset = load_dataset(**load_params)
+            
+            # Get the appropriate split
+            if hasattr(dataset, 'keys'):
+                # Use 'train' split if available, otherwise first available split
+                split_name = 'train' if 'train' in dataset.keys() else list(dataset.keys())[0]
+                data = dataset[split_name]
+            else:
+                data = dataset
+            
+            total_samples = len(data)
+            if max_samples:
+                total_samples = min(total_samples, max_samples)
+            
+            if progress_callback:
+                progress_callback(f"📊 Processing {total_samples} samples...")
+            
+            # Determine audio column name (varies by dataset)
+            audio_column = None
+            for col in ['audio', 'file', 'path', 'wav']:
+                if col in data.column_names:
+                    audio_column = col
+                    break
+            
+            if not audio_column:
+                raise ValueError(f"Could not find audio column in dataset. Available columns: {data.column_names}")
+            
+            # Process samples
+            train_files = []
+            val_files = []
+            train_metadata = []
+            val_metadata = []
+            
+            num_train = int(total_samples * train_val_split)
+            
+            for idx in range(total_samples):
+                try:
+                    sample = data[idx]
+                    
+                    # Extract audio
+                    audio_data = sample[audio_column]
+                    
+                    # Handle different audio formats
+                    if isinstance(audio_data, dict):
+                        # Format: {'array': ndarray, 'sampling_rate': int}
+                        audio_array = audio_data['array']
+                        sample_rate = audio_data['sampling_rate']
+                    elif isinstance(audio_data, str):
+                        # File path - load it
+                        import librosa
+                        audio_array, sample_rate = librosa.load(audio_data, sr=None)
+                    else:
+                        logger.warning(f"Unknown audio format for sample {idx}")
+                        continue
+                    
+                    # Save audio file
+                    audio_filename = f"sample_{idx:06d}.wav"
+                    audio_path = audio_dir / audio_filename
+                    sf.write(audio_path, audio_array, sample_rate)
+                    
+                    # Create metadata
+                    metadata = {
+                        'audio_file': str(audio_path),
+                        'sample_rate': sample_rate,
+                        'duration': len(audio_array) / sample_rate,
+                        'dataset': dataset_key,
+                        'index': idx
+                    }
+                    
+                    # Extract additional metadata from dataset
+                    for key in sample.keys():
+                        if key != audio_column and not isinstance(sample[key], (dict, list)):
+                            metadata[key] = sample[key]
+                    
+                    # Add to train or val set
+                    if idx < num_train:
+                        train_files.append(str(audio_path))
+                        train_metadata.append(metadata)
+                    else:
+                        val_files.append(str(audio_path))
+                        val_metadata.append(metadata)
+                    
+                    # Progress update
+                    if progress_callback and (idx + 1) % 50 == 0:
+                        progress_callback(f"   Processed {idx + 1}/{total_samples} samples...")
+                        
+                except Exception as e:
+                    logger.warning(f"Error processing sample {idx}: {str(e)}")
+                    continue
+            
+            # Update dataset_info.json with training-ready format
+            dataset_info.update({
+                'train_files': train_files,
+                'val_files': val_files,
+                'train_metadata': train_metadata,
+                'val_metadata': val_metadata,
+                'prepared': True,
+                'preparation_date': datetime.now().isoformat(),
+                'num_train_samples': len(train_files),
+                'num_val_samples': len(val_files),
+                'train_val_split': train_val_split
+            })
+            
+            # Save updated metadata
+            with open(metadata_path, 'w') as f:
+                json.dump(dataset_info, f, indent=2)
+            
+            if progress_callback:
+                progress_callback(f"✅ Dataset prepared successfully!")
+                progress_callback(f"   Training samples: {len(train_files)}")
+                progress_callback(f"   Validation samples: {len(val_files)}")
+                progress_callback(f"   Audio files saved to: {audio_dir}")
+            
+            logger.info(f"Dataset {dataset_key} prepared: {len(train_files)} train, {len(val_files)} val")
+            
+            return {
+                'success': True,
+                'dataset': dataset_key,
+                'num_train': len(train_files),
+                'num_val': len(val_files),
+                'audio_dir': str(audio_dir)
+            }
+            
+        except Exception as e:
+            error_msg = f"Failed to prepare dataset {dataset_key}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            if progress_callback:
                 progress_callback(f"❌ {error_msg}")
             return {
                 'success': False,
