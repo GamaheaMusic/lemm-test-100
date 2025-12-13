@@ -66,6 +66,13 @@ class DatasetService:
             'description': 'Multi-speaker English speech corpus (109 speakers)',
             'size_gb': 10.9
         },
+        'librispeech': {
+            'name': 'LibriSpeech ASR',
+            'type': 'vocal',
+            'hf_id': 'librispeech_asr',
+            'description': 'LibriSpeech corpus for speech recognition',
+            'size_gb': 60.0
+        },
         'libritts': {
             'name': 'LibriTTS',
             'type': 'vocal',
@@ -130,6 +137,24 @@ class DatasetService:
             
             dataset_config = self.DATASETS[dataset_key]
             dataset_name = dataset_config['name']
+            
+            # Check if already downloaded
+            if self.is_dataset_downloaded(dataset_key):
+                if progress_callback:
+                    progress_callback(f"✅ Dataset already downloaded: {dataset_name}")
+                    progress_callback(f"   Use 'Prepare Datasets' section to prepare for training")
+                
+                # Load and return existing info
+                dataset_dir = self.base_dir / dataset_key
+                metadata_path = dataset_dir / 'dataset_info.json'
+                with open(metadata_path, 'r') as f:
+                    info = json.load(f)
+                return {
+                    'success': True,
+                    'dataset': dataset_key,
+                    'info': info,
+                    'already_downloaded': True
+                }
             
             if progress_callback:
                 progress_callback(f"📦 Starting download: {dataset_name}")

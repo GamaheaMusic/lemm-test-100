@@ -869,6 +869,44 @@ def ai_generate_all_metadata(metadata_table):
         logger.error(f"Metadata generation failed: {e}")
         return f"❌ Error: {str(e)}"
 
+def check_downloaded_datasets():
+    """Check and display status of already downloaded datasets"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        
+        dataset_service = DatasetService()
+        downloaded = dataset_service.get_downloaded_datasets()
+        
+        if not downloaded:
+            return "📁 No datasets downloaded yet.\n\nSelect datasets above and click 'Download Datasets' to get started."
+        
+        status_messages = []
+        status_messages.append(f"📊 Downloaded Datasets Status\n")
+        status_messages.append(f"{'='*60}\n")
+        
+        for dataset_key, info in downloaded.items():
+            status_messages.append(f"✅ {info.get('name', dataset_key)}")
+            status_messages.append(f"   Type: {info.get('type', 'unknown')}")
+            status_messages.append(f"   Size: ~{info.get('size_gb', 0):.1f} GB")
+            
+            if info.get('prepared'):
+                status_messages.append(f"   Status: ✅ Prepared for training")
+                status_messages.append(f"   Train samples: {info.get('num_train_samples', 0)}")
+                status_messages.append(f"   Val samples: {info.get('num_val_samples', 0)}")
+            else:
+                status_messages.append(f"   Status: ⏳ Downloaded, needs preparation")
+                
+            status_messages.append("")
+        
+        status_messages.append(f"{'='*60}")
+        status_messages.append(f"Total downloaded: {len(downloaded)} dataset(s)")
+        
+        return "\n".join(status_messages)
+        
+    except Exception as e:
+        logger.error(f"Error checking datasets: {e}", exc_info=True)
+        return f"❌ Error checking datasets: {str(e)}"
+
 def download_prepare_datasets(vocal_datasets, symbolic_datasets):
     """Download and prepare curated datasets for training"""
     try:
@@ -897,6 +935,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
             # Vocal & Sound datasets
             "FLEURS English Speech (multi-speaker)": "fleurs",
             "VCTK Speech (109 speakers)": "vctk",
+            "LibriSpeech ASR (speech recognition)": "librispeech",
             "LibriTTS (audiobooks for TTS)": "libritts",
             "AudioSet Strong (labeled audio events)": "audioset_strong",
             "ESC-50 Environmental Sounds": "esc50",
@@ -907,6 +946,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         status_messages.append(f"📥 Starting download for {len(selected_datasets)} dataset(s)...\n")
         
         success_count = 0
+        already_downloaded_count = 0
         manual_count = 0
         error_count = 0
         
@@ -935,11 +975,14 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
                 status_messages.append(f"   {msg}")
             
             if result.get('success'):
-                success_count += 1
-                info = result.get('info', {})
-                status_messages.append(f"\n   ✅ Successfully downloaded!")
-                status_messages.append(f"   📊 Examples: {info.get('num_examples', 'N/A')}")
-                status_messages.append(f"   💾 Path: {info.get('path', 'N/A')}\n")
+                if result.get('already_downloaded'):
+                    already_downloaded_count += 1
+                else:
+                    success_count += 1
+                    info = result.get('info', {})
+                    status_messages.append(f"\n   ✅ Successfully downloaded!")
+                    status_messages.append(f"   📊 Examples: {info.get('num_examples', 'N/A')}")
+                    status_messages.append(f"   💾 Path: {info.get('path', 'N/A')}\n")
             elif result.get('manual_download_required'):
                 manual_count += 1
                 status_messages.append(f"\n   ℹ️ Manual download required")
@@ -952,13 +995,14 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         status_messages.append(f"\n{'='*60}")
         status_messages.append("📊 DOWNLOAD SUMMARY")
         status_messages.append(f"{'='*60}")
-        status_messages.append(f"✅ Successful: {success_count}")
+        status_messages.append(f"✅ Newly downloaded: {success_count}")
+        status_messages.append(f"♻️  Already downloaded: {already_downloaded_count}")
         status_messages.append(f"ℹ️  Manual required: {manual_count}")
         status_messages.append(f"❌ Errors: {error_count}")
         status_messages.append(f"📁 Total processed: {len(selected_datasets)}")
         
-        if success_count > 0:
-            status_messages.append(f"\n✅ Downloaded datasets are ready for training!")
+        if success_count > 0 or already_downloaded_count > 0:
+            status_messages.append(f"\n✅ Datasets are ready!")
             status_messages.append(f"💡 Use the 'Training Configuration' tab to start training")
         
         return "\n".join(status_messages)
@@ -1650,6 +1694,7 @@ with gr.Blocks(
                             choices=[
                                 "FLEURS English Speech (multi-speaker)",
                                 "VCTK Speech (109 speakers)",
+                                "LibriSpeech ASR (speech recognition)",
                                 "LibriTTS (audiobooks for TTS)",
                                 "AudioSet Strong (labeled audio events)",
                                 "ESC-50 Environmental Sounds",
@@ -1659,7 +1704,10 @@ with gr.Blocks(
                             info="Verified working vocal and sound datasets"
                         )
                 
-                dataset_download_btn = gr.Button("📥 Download Datasets", variant="secondary")
+                with gr.Row():
+                    dataset_download_btn = gr.Button("📥 Download Datasets", variant="secondary")
+                    check_status_btn = gr.Button("📊 Check Downloaded Datasets", variant="secondary")
+                
                 dataset_status = gr.Textbox(
                     label="Download Status", 
                     lines=15, 
@@ -1674,7 +1722,7 @@ with gr.Blocks(
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
                     choices=["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
-                             "fleurs", "vctk", "libritts", "audioset_strong", "esc50", "urbansound8k"],
+                             "fleurs", "vctk", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
                 )
@@ -1891,6 +1939,12 @@ with gr.Blocks(
     dataset_download_btn.click(
         fn=download_prepare_datasets,
         inputs=[vocal_datasets, symbolic_datasets],
+        outputs=[dataset_status]
+    )
+    
+    check_status_btn.click(
+        fn=check_downloaded_datasets,
+        inputs=[],
         outputs=[dataset_status]
     )
     
