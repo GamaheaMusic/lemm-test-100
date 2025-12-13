@@ -173,8 +173,7 @@ class DatasetService:
             # Prepare load_dataset parameters
             load_params = {
                 'path': hf_id,
-                'cache_dir': str(dataset_dir / "cache"),
-                'trust_remote_code': True  # Some datasets require custom code
+                'cache_dir': str(dataset_dir / "cache")
             }
             
             # Add optional config/split parameters
