@@ -13,90 +13,94 @@ logger = logging.getLogger(__name__)
 class DatasetService:
     """Service for downloading and preparing training datasets"""
     
-    # Dataset configurations
+    # Dataset configurations (Parquet format only - no loading scripts)
     DATASETS = {
-        # Music Datasets (Verified HuggingFace IDs)
-        "gtzan": {
-            "name": "GTZAN Music Genre (1000 tracks, 10 genres)",
-            "hf_id": "marsyas/gtzan",
-            "type": "music",
-            "description": "1000 songs across 10 music genres for style learning",
-            "size_gb": 1.2,
-            "splits": ["train"]
+        'gtzan': {
+            'name': 'GTZAN Music Genre Dataset',
+            'type': 'music',
+            'hf_id': 'lewtun/music_genres_small',
+            'description': 'Music genre classification dataset (GTZAN-based)',
+            'size_gb': 1.2
         },
-        "nsynth_valid": {
-            "name": "NSynth Musical Notes (Validation set)",
-            "hf_id": "google/nsynth",
-            "split": "valid",
-            "type": "music",
-            "description": "Musical notes with unique pitch and timbre",
-            "size_gb": 0.8,
-            "splits": ["valid"]
+        'nsynth': {
+            'name': 'NSynth Complete Dataset',
+            'type': 'music',
+            'hf_id': 'Loie/NSynth',
+            'description': 'Musical note dataset with pitch and timbre variations',
+            'size_gb': 30.0
         },
-        "maestro": {
-            "name": "MAESTRO Piano Performances (subset)",
-            "hf_id": "roszcz/maestro-v3",
-            "type": "music",
-            "description": "Classical piano performances with MIDI + audio",
-            "size_gb": 2.0,
-            "splits": ["validation"]
+        'maestro': {
+            'name': 'MAESTRO Piano Performances',
+            'type': 'music',
+            'hf_id': 'roszcz/maestro-sustain-v2.0.0',
+            'description': 'Classical piano performances - Parquet format',
+            'size_gb': 120.0
         },
-        
-        # Vocal Datasets (Verified HuggingFace IDs)
-        "ljspeech": {
-            "name": "LJSpeech (13k vocal clips, single speaker)",
-            "hf_id": "lj_speech",
-            "type": "vocal",
-            "description": "High-quality single speaker for vocal characteristics",
-            "size_gb": 2.6,
-            "splits": ["train"]
+        'million_song': {
+            'name': 'Million Song Dataset (10k Subset)',
+            'type': 'music',
+            'hf_id': 'maharshipandya/spotify-tracks-dataset',
+            'description': 'Large music dataset with audio features',
+            'size_gb': 1.8
         },
-        "common_voice_en": {
-            "name": "Common Voice English (diverse speakers)",
-            "hf_id": "mozilla-foundation/common_voice_11_0",
-            "type": "vocal",
-            "description": "Diverse English speakers with various accents",
-            "size_gb": 5.0,
-            "config": "en",
-            "splits": ["train", "validation"]
+        'fma_large': {
+            'name': 'Free Music Archive - Large',
+            'type': 'music',
+            'hf_id': 'rudraml/fma-small',
+            'description': 'Free Music Archive dataset - 8k tracks, 8 genres',
+            'size_gb': 7.2
         },
-        "librispeech_clean": {
-            "name": "LibriSpeech Clean (English audiobooks)",
-            "hf_id": "librispeech_asr",
-            "type": "vocal",
-            "description": "Clean English speech from audiobooks",
-            "size_gb": 6.3,
-            "config": "clean",
-            "splits": ["train.100"]
+        'ljspeech': {
+            'name': 'LJSpeech Vocal Dataset',
+            'type': 'vocal',
+            'hf_id': 'keithito/lj-speech',
+            'description': 'Single speaker vocal dataset with 13,100 clips - Parquet format',
+            'size_gb': 2.6
         },
-        
-        # Sound Effects (Verified HuggingFace IDs)
-        "esc50": {
-            "name": "ESC-50 Environmental Sounds (2000 samples)",
-            "hf_id": "ashraq/esc50",
-            "type": "sound_effects",
-            "description": "2000 environmental sounds across 50 classes",
-            "size_gb": 0.6,
-            "splits": ["train", "test"]
+        'common_voice_en': {
+            'name': 'Common Voice English (Complete)',
+            'type': 'vocal',
+            'hf_id': 'mozilla-foundation/common_voice_17_0',
+            'config': 'en',
+            'description': 'Large-scale multilingual speech corpus - latest version',
+            'size_gb': 75.0
         },
-        
-        # Speech Commands (Verified HuggingFace IDs)
-        "speech_commands": {
-            "name": "Google Speech Commands (short words)",
-            "hf_id": "speech_commands",
-            "type": "vocal",
-            "description": "Short spoken words for vocal pattern learning",
-            "size_gb": 2.0,
-            "config": "v0.02",
-            "splits": ["train", "validation", "test"]
+        'librispeech': {
+            'name': 'LibriSpeech Complete',
+            'type': 'vocal',
+            'hf_id': 'openslr/librispeech_asr',
+            'description': 'Audiobooks dataset - 1,000 hours from multiple speakers',
+            'size_gb': 60.0
         },
-        
-        # Note: Original datasets that were not found
-        # "opensinger": Not available on HuggingFace Hub
-        # "m4singer": Not available on HuggingFace Hub  
-        # "lakh_midi": Not reliably available
-        # "ccmixter": Requires manual download
-        # "mutopia": Requires manual download
+        'musiccaps': {
+            'name': 'MusicCaps',
+            'type': 'music',
+            'hf_id': 'google/MusicCaps',
+            'description': 'Music audio captioning with 5.5k clips and text descriptions',
+            'size_gb': 5.5
+        },
+        'audioset_music': {
+            'name': 'AudioSet Strong',
+            'type': 'music',
+            'hf_id': 'agkphysics/AudioSet',
+            'description': 'High-quality labeled audio events',
+            'size_gb': 12.0
+        },
+        'esc50': {
+            'name': 'ESC-50 Environmental Sounds',
+            'type': 'sound_effects',
+            'hf_id': 'ashraq/esc50',
+            'description': 'Environmental sound classification with 2,000 recordings',
+            'size_gb': 0.6
+        },
+        'speech_commands': {
+            'name': 'Google Speech Commands',
+            'type': 'vocal',
+            'hf_id': 'google/speech_commands',
+            'config': 'v0.02',
+            'description': 'Short spoken words for keyword detection',
+            'size_gb': 2.0
+        }
     }
     
     def __init__(self, base_dir: str = "training_data"):
