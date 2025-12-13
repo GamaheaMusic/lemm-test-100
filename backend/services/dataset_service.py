@@ -119,6 +119,43 @@ class DatasetService:
         """
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
+    
+    def is_dataset_downloaded(self, dataset_key: str) -> bool:
+        """
+        Check if a dataset has already been downloaded
+        
+        Args:
+            dataset_key: Key identifying the dataset
+            
+        Returns:
+            True if dataset exists and has metadata file, False otherwise
+        """
+        dataset_dir = self.base_dir / dataset_key
+        metadata_path = dataset_dir / 'dataset_info.json'
+        return metadata_path.exists()
+    
+    def get_downloaded_datasets(self) -> Dict[str, Dict]:
+        """
+        Get information about all downloaded datasets
+        
+        Returns:
+            Dictionary mapping dataset keys to their metadata
+        """
+        downloaded = {}
+        
+        for dataset_key in self.DATASETS.keys():
+            if self.is_dataset_downloaded(dataset_key):
+                dataset_dir = self.base_dir / dataset_key
+                metadata_path = dataset_dir / 'dataset_info.json'
+                
+                try:
+                    with open(metadata_path, 'r') as f:
+                        info = json.load(f)
+                    downloaded[dataset_key] = info
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata for {dataset_key}: {e}")
+        
+        return downloaded
         
     def download_dataset(self, dataset_key: str, progress_callback=None) -> Dict:
         """
