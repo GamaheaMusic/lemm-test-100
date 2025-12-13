@@ -23,55 +23,55 @@ class DatasetService:
             'description': 'Music genre classification dataset (GTZAN-based)',
             'size_gb': 1.2
         },
-        'nsynth': {
-            'name': 'NSynth Complete Dataset',
+        'musicnet': {
+            'name': 'MusicNet Classical Music',
             'type': 'music',
-            'hf_id': 'Loie/NSynth',
-            'description': 'Musical note dataset with pitch and timbre variations',
-            'size_gb': 30.0
+            'hf_id': 'roszcz/musicnet',
+            'description': 'Classical music recordings with note-level annotations',
+            'size_gb': 3.5
         },
-        'maestro': {
-            'name': 'MAESTRO Piano Performances',
+        'medley_solos': {
+            'name': 'Medley-solos-DB',
             'type': 'music',
-            'hf_id': 'roszcz/maestro-sustain-v2.0.0',
-            'description': 'Classical piano performances - Parquet format',
-            'size_gb': 120.0
+            'hf_id': 'ccmusic-database/medley-solos-db',
+            'description': 'Solo instrument recordings across various instruments',
+            'size_gb': 2.8
         },
-        'million_song': {
-            'name': 'Million Song Dataset (10k Subset)',
+        'jamendo': {
+            'name': 'MTG-Jamendo Dataset',
             'type': 'music',
-            'hf_id': 'maharshipandya/spotify-tracks-dataset',
-            'description': 'Large music dataset with audio features',
-            'size_gb': 1.8
+            'hf_id': 'MTG/jamendo-dataset',
+            'description': 'Music tagging dataset with 55k tracks',
+            'size_gb': 25.0
         },
-        'fma_large': {
-            'name': 'Free Music Archive - Large',
+        'fma_small': {
+            'name': 'Free Music Archive (Small)',
             'type': 'music',
             'hf_id': 'rudraml/fma-small',
-            'description': 'Free Music Archive dataset - 8k tracks, 8 genres',
+            'description': 'FMA dataset - 8k tracks, 8 genres, verified working',
             'size_gb': 7.2
         },
-        'ljspeech': {
-            'name': 'LJSpeech Vocal Dataset',
+        'fleurs': {
+            'name': 'FLEURS Speech Dataset',
             'type': 'vocal',
-            'hf_id': 'keithito/lj-speech',
-            'description': 'Single speaker vocal dataset with 13,100 clips - Parquet format',
-            'size_gb': 2.6
+            'hf_id': 'google/fleurs',
+            'config': 'en_us',
+            'description': 'Multilingual speech dataset - English subset',
+            'size_gb': 3.5
         },
-        'common_voice_en': {
-            'name': 'Common Voice English (Complete)',
+        'vctk': {
+            'name': 'VCTK Speech Dataset',
             'type': 'vocal',
-            'hf_id': 'mozilla-foundation/common_voice_17_0',
-            'config': 'en',
-            'description': 'Large-scale multilingual speech corpus - latest version',
-            'size_gb': 75.0
+            'hf_id': 'vctk',
+            'description': 'Multi-speaker English speech corpus (109 speakers)',
+            'size_gb': 10.9
         },
-        'librispeech': {
-            'name': 'LibriSpeech Complete',
+        'libritts': {
+            'name': 'LibriTTS',
             'type': 'vocal',
-            'hf_id': 'openslr/librispeech_asr',
-            'description': 'Audiobooks dataset - 1,000 hours from multiple speakers',
-            'size_gb': 60.0
+            'hf_id': 'cdminix/libritts-aligned',
+            'description': 'Multi-speaker English audiobook corpus for TTS',
+            'size_gb': 35.0
         },
         'musiccaps': {
             'name': 'MusicCaps',
@@ -80,7 +80,7 @@ class DatasetService:
             'description': 'Music audio captioning with 5.5k clips and text descriptions',
             'size_gb': 5.5
         },
-        'audioset_music': {
+        'audioset_strong': {
             'name': 'AudioSet Strong',
             'type': 'music',
             'hf_id': 'agkphysics/AudioSet',
@@ -94,13 +94,12 @@ class DatasetService:
             'description': 'Environmental sound classification with 2,000 recordings',
             'size_gb': 0.6
         },
-        'speech_commands': {
-            'name': 'Google Speech Commands',
-            'type': 'vocal',
-            'hf_id': 'google/speech_commands',
-            'config': 'v0.02',
-            'description': 'Short spoken words for keyword detection',
-            'size_gb': 2.0
+        'urbansound8k': {
+            'name': 'UrbanSound8K',
+            'type': 'sound_effects',
+            'hf_id': 'danavery/urbansound8K',
+            'description': 'Urban sound classification - 8,732 labeled sound excerpts',
+            'size_gb': 5.6
         }
     }
     

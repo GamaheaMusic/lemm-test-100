@@ -889,18 +889,18 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         dataset_map = {
             # Music datasets
             "GTZAN Music Genre (1000 tracks, 10 genres)": "gtzan",
-            "NSynth Complete (300k+ musical notes)": "nsynth",
-            "MAESTRO Piano Performances (complete)": "maestro",
-            "Million Song Dataset (10k subset)": "million_song",
-            "Free Music Archive Large (106k tracks)": "fma_large",
+            "MusicNet Classical (3.5GB, note annotations)": "musicnet",
+            "Medley-solos-DB (solo instruments)": "medley_solos",
+            "MTG-Jamendo (55k tracks, music tagging)": "jamendo",
+            "Free Music Archive Small (8k tracks)": "fma_small",
             "MusicCaps (5.5k clips with descriptions)": "musiccaps",
-            "AudioSet Music (labeled audio events)": "audioset_music",
             # Vocal & Sound datasets
-            "LJSpeech (13k vocal clips)": "ljspeech",
-            "Common Voice English (complete)": "common_voice_en",
-            "LibriSpeech Complete (1000 hours)": "librispeech",
+            "FLEURS English Speech (multi-speaker)": "fleurs",
+            "VCTK Speech (109 speakers)": "vctk",
+            "LibriTTS (audiobooks for TTS)": "libritts",
+            "AudioSet Strong (labeled audio events)": "audioset_strong",
             "ESC-50 Environmental Sounds": "esc50",
-            "Google Speech Commands": "speech_commands"
+            "UrbanSound8K (urban sounds)": "urbansound8k"
         }
         
         status_messages = []
@@ -1634,29 +1634,29 @@ with gr.Blocks(
                         vocal_datasets = gr.CheckboxGroup(
                             choices=[
                                 "GTZAN Music Genre (1000 tracks, 10 genres)",
-                                "NSynth Complete (300k+ musical notes)",
-                                "MAESTRO Piano Performances (complete)",
-                                "Million Song Dataset (10k subset)",
-                                "Free Music Archive Large (106k tracks)",
-                                "MusicCaps (5.5k clips with descriptions)",
-                                "AudioSet Music (labeled audio events)"
+                                "MusicNet Classical (3.5GB, note annotations)",
+                                "Medley-solos-DB (solo instruments)",
+                                "MTG-Jamendo (55k tracks, music tagging)",
+                                "Free Music Archive Small (8k tracks)",
+                                "MusicCaps (5.5k clips with descriptions)"
                             ],
                             label="Select Music Datasets",
-                            info="Comprehensive music datasets for training (11TB storage available)"
+                            info="Verified working music datasets (11TB storage available)"
                         )
                     
                     with gr.Column():
                         gr.Markdown("**Vocal & Sound Datasets**")
                         symbolic_datasets = gr.CheckboxGroup(
                             choices=[
-                                "LJSpeech (13k vocal clips)",
-                                "Common Voice English (complete)",
-                                "LibriSpeech Complete (1000 hours)",
+                                "FLEURS English Speech (multi-speaker)",
+                                "VCTK Speech (109 speakers)",
+                                "LibriTTS (audiobooks for TTS)",
+                                "AudioSet Strong (labeled audio events)",
                                 "ESC-50 Environmental Sounds",
-                                "Google Speech Commands"
+                                "UrbanSound8K (urban sounds)"
                             ],
                             label="Select Vocal/Sound Datasets",
-                            info="Complete vocal and sound datasets"
+                            info="Verified working vocal and sound datasets"
                         )
                 
                 dataset_download_btn = gr.Button("📥 Download Datasets", variant="secondary")
@@ -1673,8 +1673,8 @@ with gr.Blocks(
                 gr.Markdown("After downloading, prepare datasets by extracting audio files and creating train/val splits.")
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
-                    choices=["gtzan", "nsynth", "maestro", "million_song", "fma_large", "musiccaps", "audioset_music", 
-                             "ljspeech", "common_voice_en", "librispeech", "esc50", "speech_commands"],
+                    choices=["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+                             "fleurs", "vctk", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
                 )
