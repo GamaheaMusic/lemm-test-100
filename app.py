@@ -869,6 +869,95 @@ def ai_generate_all_metadata(metadata_table):
         logger.error(f"Metadata generation failed: {e}")
         return f"❌ Error: {str(e)}"
 
+def download_prepare_datasets(vocal_datasets, symbolic_datasets):
+    """Download and prepare curated datasets for training"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        
+        selected_datasets = []
+        if vocal_datasets:
+            selected_datasets.extend(vocal_datasets)
+        if symbolic_datasets:
+            selected_datasets.extend(symbolic_datasets)
+        
+        if not selected_datasets:
+            return "❌ No datasets selected. Please check at least one dataset."
+        
+        dataset_service = DatasetService()
+        
+        # Map display names to dataset keys
+        dataset_map = {
+            "OpenSinger (Multi-singer, 50+ hours)": "opensinger",
+            "M4Singer (Chinese pop, 29 hours)": "m4singer",
+            "CC Mixter (Creative Commons stems)": "ccmixter",
+            "Lakh MIDI (176k files, diverse genres)": "lakh_midi",
+            "Mutopia (Classical, 2000+ pieces)": "mutopia"
+        }
+        
+        status_messages = []
+        status_messages.append(f"📥 Starting download for {len(selected_datasets)} dataset(s)...\n")
+        
+        success_count = 0
+        manual_count = 0
+        error_count = 0
+        
+        for dataset_display_name in selected_datasets:
+            dataset_key = dataset_map.get(dataset_display_name)
+            
+            if not dataset_key:
+                status_messages.append(f"⚠️ Unknown dataset: {dataset_display_name}\n")
+                error_count += 1
+                continue
+            
+            status_messages.append(f"\n{'='*60}")
+            status_messages.append(f"📦 Processing: {dataset_display_name}")
+            status_messages.append(f"{'='*60}\n")
+            
+            # Progress callback
+            progress_msgs = []
+            def progress_callback(msg):
+                progress_msgs.append(msg)
+            
+            # Download dataset
+            result = dataset_service.download_dataset(dataset_key, progress_callback)
+            
+            # Add progress messages
+            for msg in progress_msgs:
+                status_messages.append(f"   {msg}")
+            
+            if result.get('success'):
+                success_count += 1
+                info = result.get('info', {})
+                status_messages.append(f"\n   ✅ Successfully downloaded!")
+                status_messages.append(f"   📊 Examples: {info.get('num_examples', 'N/A')}")
+                status_messages.append(f"   💾 Path: {info.get('path', 'N/A')}\n")
+            elif result.get('manual_download_required'):
+                manual_count += 1
+                status_messages.append(f"\n   ℹ️ Manual download required")
+                status_messages.append(f"   🔗 URL: {result.get('url', 'N/A')}\n")
+            else:
+                error_count += 1
+                status_messages.append(f"\n   ❌ Error: {result.get('error', 'Unknown error')}\n")
+        
+        # Summary
+        status_messages.append(f"\n{'='*60}")
+        status_messages.append("📊 DOWNLOAD SUMMARY")
+        status_messages.append(f"{'='*60}")
+        status_messages.append(f"✅ Successful: {success_count}")
+        status_messages.append(f"ℹ️  Manual required: {manual_count}")
+        status_messages.append(f"❌ Errors: {error_count}")
+        status_messages.append(f"📁 Total processed: {len(selected_datasets)}")
+        
+        if success_count > 0:
+            status_messages.append(f"\n✅ Downloaded datasets are ready for training!")
+            status_messages.append(f"💡 Use the 'Training Configuration' tab to start training")
+        
+        return "\n".join(status_messages)
+        
+    except Exception as e:
+        logger.error(f"Dataset download failed: {e}", exc_info=True)
+        return f"❌ Error: {str(e)}\n\nStacktrace logged to console."
+
 def prepare_user_training_dataset(audio_files, metadata_table, split_clips, separate_stems):
     """Prepare user audio dataset for training"""
     try:
@@ -1491,7 +1580,13 @@ with gr.Blocks(
                         )
                 
                 dataset_download_btn = gr.Button("📥 Download & Prepare Datasets", variant="secondary")
-                dataset_status = gr.Textbox(label="Dataset Status", lines=2, interactive=False)
+                dataset_status = gr.Textbox(
+                    label="Dataset Status", 
+                    lines=15, 
+                    max_lines=25,
+                    interactive=False,
+                    show_copy_button=True
+                )
             
             # Tab 2: User Audio Training
             with gr.Tab("🎵 User Audio Training"):
@@ -1684,6 +1779,12 @@ with gr.Blocks(
                 )
     
     # LoRA Training Event Handlers
+    dataset_download_btn.click(
+        fn=download_prepare_datasets,
+        inputs=[vocal_datasets, symbolic_datasets],
+        outputs=[dataset_status]
+    )
+    
     analyze_audio_btn.click(
         fn=analyze_user_audio,
         inputs=[user_audio_upload, split_to_clips, separate_stems],
