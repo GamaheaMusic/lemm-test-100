@@ -130,12 +130,13 @@ class DatasetService:
             if progress_callback:
                 progress_callback(f"📦 Starting download: {dataset_name}")
                 
-                # Warn about dataset size
+                # Show dataset size info
                 size_gb = dataset_config.get('size_gb', 0)
-                if size_gb > 1.0:
-                    progress_callback(f"⚠️  WARNING: Dataset size is {size_gb:.1f} GB")
-                    progress_callback(f"   This exceeds the 1 GB HuggingFace Space limit!")
-                    progress_callback(f"   Download may fail or fill storage completely.")
+                if size_gb > 100.0:
+                    progress_callback(f"⚠️  Large dataset: {size_gb:.1f} GB")
+                    progress_callback(f"   This may take significant time to download.")
+                elif size_gb > 10.0:
+                    progress_callback(f"ℹ️  Dataset size: ~{size_gb:.1f} GB (may take a few minutes)")
                 else:
                     progress_callback(f"ℹ️  Dataset size: ~{size_gb:.1f} GB")
             
