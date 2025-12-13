@@ -262,6 +262,21 @@ class LoRATrainingService:
             if not dataset_info:
                 raise ValueError(f"Dataset not found: {dataset_name}")
             
+            # Check if dataset is from HuggingFace and needs preparation
+            if dataset_info.get('hf_dataset') and not dataset_info.get('prepared'):
+                raise ValueError(
+                    f"Dataset '{dataset_name}' is a HuggingFace dataset that hasn't been prepared for training yet. "
+                    f"Please use the 'User Audio Training' tab to upload and prepare your own audio files, "
+                    f"or wait for dataset preparation features to be implemented."
+                )
+            
+            # Validate dataset has required fields
+            if 'train_files' not in dataset_info or 'val_files' not in dataset_info:
+                raise ValueError(
+                    f"Dataset '{dataset_name}' is missing required training files. "
+                    f"Please use prepared datasets or upload your own audio in the 'User Audio Training' tab."
+                )
+            
             # Default config
             default_config = {
                 'batch_size': 4,

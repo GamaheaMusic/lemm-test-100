@@ -189,7 +189,7 @@ class DatasetService:
             # Download dataset
             dataset = load_dataset(**load_params)
             
-            # Save dataset info
+            # Save dataset info for LoRA training compatibility
             dataset_info = {
                 'name': config['name'],
                 'type': config['type'],
@@ -199,7 +199,14 @@ class DatasetService:
                 'splits': list(dataset.keys()) if hasattr(dataset, 'keys') else ['default'],
                 'num_examples': {split: len(dataset[split]) for split in dataset.keys()} if hasattr(dataset, 'keys') else len(dataset),
                 'features': str(dataset[list(dataset.keys())[0]].features) if hasattr(dataset, 'keys') else str(dataset.features),
-                'path': str(dataset_dir)
+                'path': str(dataset_dir),
+                # Add placeholders for LoRA training service compatibility
+                'train_files': [],
+                'val_files': [],
+                'train_metadata': [],
+                'val_metadata': [],
+                'prepared': False,  # Indicates dataset needs preparation before training
+                'hf_dataset': True  # Flag that this is a HuggingFace dataset
             }
             
             # Save metadata
