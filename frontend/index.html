@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Generation App</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Music Generation Studio</h1>
+            <p>Create music with AI-powered generation</p>
+        </header>
+
+        <main>
+            <!-- Generation Controls -->
+            <section class="generation-panel">
+                <h2>Generation Controls</h2>
+                
+                <div class="form-group">
+                    <label for="prompt">Music Prompt</label>
+                    <textarea 
+                        id="prompt" 
+                        placeholder="Describe the music you want to generate... (e.g., upbeat pop song with drums and synth)"
+                        rows="3"
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="lyrics">Lyrics (optional - leave empty for instrumental)</label>
+                    <textarea 
+                        id="lyrics" 
+                        placeholder="Enter your lyrics here, or leave empty for instrumental music..."
+                        rows="6"
+                    ></textarea>
+                    <button id="autoGenLyricsBtn" class="btn btn-secondary" style="margin-top: 8px;">
+                        🎤 Generate Lyrics
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration (seconds)</label>
+                    <input type="number" id="duration" value="30" min="10" max="120">
+                </div>
+
+                <div class="position-controls">
+                    <label>Add to Timeline Position:</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="position" value="intro">
+                            Intro (Start)
+                        </label>
+                        <label>
+                            <input type="radio" name="position" value="previous">
+                            Previous
+                        </label>
+                        <label>
+                            <input type="radio" name="position" value="next" checked>
+                            Next
+                        </label>
+                        <label>
+                            <input type="radio" name="position" value="outro">
+                            Outro (End)
+                        </label>
+                    </div>
+                </div>
+
+                <button id="generateBtn" class="btn btn-primary">
+                    ✨ Generate Music Clip
+                </button>
+
+                <div id="status" class="status-message"></div>
+            </section>
+
+            <!-- DAW-Style Timeline -->
+            <section class="timeline-panel">
+                <h2>Timeline</h2>
+                <div class="timeline-controls">
+                    <div class="playback-controls">
+                        <button id="playPauseBtn" class="btn btn-icon" title="Play/Pause">
+                            ▶️
+                        </button>
+                        <button id="stopBtn" class="btn btn-icon" title="Stop">
+                            ⏹️
+                        </button>
+                        <button id="rewindBtn" class="btn btn-icon" title="Rewind">
+                            ⏮️
+                        </button>
+                        <span id="currentTime" class="time-display">0:00.0</span>
+                        <span class="time-separator">/</span>
+                        <span id="totalDuration" class="time-display">0:00.0</span>
+                    </div>
+                    <div class="timeline-tools">
+                        <button id="zoomInBtn" class="btn btn-icon" title="Zoom In">🔍+</button>
+                        <button id="zoomOutBtn" class="btn btn-icon" title="Zoom Out">🔍-</button>
+                        <button id="fitBtn" class="btn btn-icon" title="Fit to Screen">⬌</button>
+                        <button id="advancedOptionsBtn" class="btn btn-icon advanced-btn" title="Advanced Options">⚙️ Advanced</button>
+                        <span id="clipCount" class="clip-counter">0 clips</span>
+                    </div>
+                </div>
+                
+                <div class="daw-timeline-container">
+                    <!-- Time ruler -->
+                    <div class="time-ruler" id="timeRuler">
+                        <canvas id="rulerCanvas"></canvas>
+                    </div>
+                    
+                    <!-- Tracks area -->
+                    <div class="tracks-container" id="tracksContainer">
+                        <!-- Playhead -->
+                        <div class="playhead" id="playhead"></div>
+                        
+                        <!-- Track list -->
+                        <div class="track" id="musicTrack" data-track="music">
+                            <div class="track-header">
+                                <span class="track-name">🎵 Music & Vocals</span>
+                                <div class="track-controls">
+                                    <button class="track-btn" title="Mute">🔇</button>
+                                    <button class="track-btn" title="Solo">S</button>
+                                </div>
+                            </div>
+                            <div class="track-content" id="musicTrackContent">
+                                <div class="empty-track-hint">Drop clips here or generate music above</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-actions">
+                    <button id="exportBtn" class="btn btn-success" disabled>
+                        💾 Export/Download
+                    </button>
+                    <button id="clearBtn" class="btn btn-danger">
+                        🗑️ Clear Timeline
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Advanced Options Modal -->
+    <div id="advancedModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Advanced Audio Mastering</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Left Panel: Presets -->
+                <div class="mastering-panel">
+                    <div class="preset-panel">
+                        <h3>Mastering Presets</h3>
+                        <div class="preset-categories">
+                            <select id="presetSelect" class="preset-select">
+                                <option value="">-- Select Preset --</option>
+                            </select>
+                        </div>
+                        <div id="presetDescription" class="preset-description">
+                            Select a preset to see description
+                        </div>
+                        <button id="applyPresetBtn" class="btn btn-secondary" disabled>
+                            Apply Preset to Preview
+                        </button>
+                    </div>
+
+                    <!-- Right Panel: EQ Controls -->
+                    <div class="eq-panel">
+                        <h3>Custom EQ</h3>
+                        <div class="eq-controls">
+                            <!-- Low Shelf -->
+                            <div class="eq-band">
+                                <label>Low Shelf (100 Hz)</label>
+                                <input type="range" id="lowShelfGain" min="-12" max="12" step="0.1" value="0">
+                                <span class="eq-value" id="lowShelfValue">0.0 dB</span>
+                            </div>
+                            
+                            <!-- Low Mid -->
+                            <div class="eq-band">
+                                <label>Low Mid (500 Hz)</label>
+                                <input type="range" id="lowMidGain" min="-12" max="12" step="0.1" value="0">
+                                <span class="eq-value" id="lowMidValue">0.0 dB</span>
+                            </div>
+                            
+                            <!-- Mid -->
+                            <div class="eq-band">
+                                <label>Mid (2000 Hz)</label>
+                                <input type="range" id="midGain" min="-12" max="12" step="0.1" value="0">
+                                <span class="eq-value" id="midValue">0.0 dB</span>
+                            </div>
+                            
+                            <!-- High Mid -->
+                            <div class="eq-band">
+                                <label>High Mid (5000 Hz)</label>
+                                <input type="range" id="highMidGain" min="-12" max="12" step="0.1" value="0">
+                                <span class="eq-value" id="highMidValue">0.0 dB</span>
+                            </div>
+                            
+                            <!-- High Shelf -->
+                            <div class="eq-band">
+                                <label>High Shelf (10000 Hz)</label>
+                                <input type="range" id="highShelfGain" min="-12" max="12" step="0.1" value="0">
+                                <span class="eq-value" id="highShelfValue">0.0 dB</span>
+                            </div>
+                        </div>
+                        
+                        <div class="dynamics-controls">
+                            <h4>Dynamics</h4>
+                            
+                            <!-- Compression -->
+                            <div class="dynamics-section">
+                                <label>
+                                    <input type="checkbox" id="enableCompression">
+                                    Enable Compression
+                                </label>
+                                <div class="compression-controls" id="compressionControls" style="display: none;">
+                                    <div class="param-control">
+                                        <label>Threshold</label>
+                                        <input type="range" id="compThreshold" min="-40" max="0" step="1" value="-12">
+                                        <span id="compThresholdValue">-12 dB</span>
+                                    </div>
+                                    <div class="param-control">
+                                        <label>Ratio</label>
+                                        <input type="range" id="compRatio" min="1" max="10" step="0.1" value="2">
+                                        <span id="compRatioValue">2.0:1</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Limiting -->
+                            <div class="dynamics-section">
+                                <label>
+                                    <input type="checkbox" id="enableLimiting" checked>
+                                    Enable Limiting
+                                </label>
+                                <div class="limiting-controls" id="limitingControls">
+                                    <div class="param-control">
+                                        <label>Ceiling</label>
+                                        <input type="range" id="limiterCeiling" min="-3" max="0" step="0.1" value="-0.5">
+                                        <span id="limiterCeilingValue">-0.5 dB</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button id="applyCustomEQBtn" class="btn btn-secondary">
+                            Apply Custom EQ to Preview
+                        </button>
+                        <button id="resetEQBtn" class="btn btn-secondary">
+                            Reset EQ
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Preview Timeline -->
+                <div class="preview-section">
+                    <h3>Preview</h3>
+                    <div class="preview-timeline" id="previewTimeline">
+                        <div class="preview-info">
+                            <p id="previewStatus">No preview loaded. Apply a preset or custom EQ to hear changes.</p>
+                            <audio id="previewAudio" controls style="width: 100%; margin-top: 10px;"></audio>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button id="cancelMasteringBtn" class="btn btn-secondary">Cancel</button>
+                <button id="acceptMasteringBtn" class="btn btn-primary" disabled>Accept & Apply to Timeline</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/daw-timeline.js"></script>
+    <script src="js/mastering.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
