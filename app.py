@@ -934,7 +934,6 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
             "MusicCaps (5.5k clips with descriptions)": "musiccaps",
             # Vocal & Sound datasets
             "FLEURS English Speech (multi-speaker)": "fleurs",
-            "VCTK Speech (109 speakers)": "vctk",
             "LibriSpeech ASR (speech recognition)": "librispeech",
             "LibriTTS (audiobooks for TTS)": "libritts",
             "AudioSet Strong (labeled audio events)": "audioset_strong",
@@ -1693,7 +1692,6 @@ with gr.Blocks(
                         symbolic_datasets = gr.CheckboxGroup(
                             choices=[
                                 "FLEURS English Speech (multi-speaker)",
-                                "VCTK Speech (109 speakers)",
                                 "LibriSpeech ASR (speech recognition)",
                                 "LibriTTS (audiobooks for TTS)",
                                 "AudioSet Strong (labeled audio events)",
@@ -1722,7 +1720,7 @@ with gr.Blocks(
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
                     choices=["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
-                             "fleurs", "vctk", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
+                             "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
                 )

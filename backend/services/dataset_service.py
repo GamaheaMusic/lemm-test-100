@@ -59,13 +59,6 @@ class DatasetService:
             'description': 'Multilingual speech dataset - English subset',
             'size_gb': 3.5
         },
-        'vctk': {
-            'name': 'VCTK Speech Dataset',
-            'type': 'vocal',
-            'hf_id': 'vctk',
-            'description': 'Multi-speaker English speech corpus (109 speakers)',
-            'size_gb': 10.9
-        },
         'librispeech': {
             'name': 'LibriSpeech ASR',
             'type': 'vocal',
