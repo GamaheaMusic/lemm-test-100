@@ -372,8 +372,13 @@ class DatasetService:
                 progress_callback(f"📂 Loading dataset from cache...")
             
             from datasets import load_dataset
+            import librosa
             hf_id = config['hf_id']
-            load_params = {'path': hf_id, 'cache_dir': str(cache_dir)}
+            # Disable automatic audio decoding to avoid torchcodec dependency
+            load_params = {
+                'path': hf_id, 
+                'cache_dir': str(cache_dir),
+            }
             if 'config' in config:
                 load_params['name'] = config['config']
             if 'split' in config:
@@ -423,15 +428,32 @@ class DatasetService:
                     
                     # Handle different audio formats
                     if isinstance(audio_data, dict):
-                        # Format: {'array': ndarray, 'sampling_rate': int}
-                        audio_array = audio_data['array']
-                        sample_rate = audio_data['sampling_rate']
+                        # Check if it has 'path' or 'bytes' keys (raw data from datasets)
+                        if 'path' in audio_data and audio_data['path']:
+                            # Load from file path
+                            audio_array, sample_rate = librosa.load(audio_data['path'], sr=None)
+                        elif 'bytes' in audio_data and audio_data['bytes']:
+                            # Decode from bytes
+                            import io
+                            audio_bytes = io.BytesIO(audio_data['bytes'])
+                            audio_array, sample_rate = sf.read(audio_bytes)
+                        elif 'array' in audio_data:
+                            # Already decoded format: {'array': ndarray, 'sampling_rate': int}
+                            audio_array = audio_data['array']
+                            sample_rate = audio_data.get('sampling_rate', 22050)
+                        else:
+                            logger.warning(f"Unknown dict audio format for sample {idx}: {audio_data.keys()}")
+                            continue
                     elif isinstance(audio_data, str):
                         # File path - load it
-                        import librosa
                         audio_array, sample_rate = librosa.load(audio_data, sr=None)
+                    elif isinstance(audio_data, bytes):
+                        # Raw bytes - decode it
+                        import io
+                        audio_bytes = io.BytesIO(audio_data)
+                        audio_array, sample_rate = sf.read(audio_bytes)
                     else:
-                        logger.warning(f"Unknown audio format for sample {idx}")
+                        logger.warning(f"Unknown audio format for sample {idx}: {type(audio_data)}")
                         continue
                     
                     # Save audio file
