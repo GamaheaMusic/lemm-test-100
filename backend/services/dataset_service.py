@@ -394,7 +394,7 @@ class DatasetService:
             else:
                 data = dataset
             
-            # Determine audio column and cast to disable automatic decoding
+            # Determine audio column and disable automatic decoding
             audio_column = None
             for col in ['audio', 'file', 'path', 'wav']:
                 if col in data.column_names:
@@ -404,13 +404,8 @@ class DatasetService:
             if not audio_column:
                 raise ValueError(f"Could not find audio column in dataset. Available columns: {data.column_names}")
             
-            # Cast audio column to disable automatic decoding - we'll decode manually with librosa
-            if audio_column in data.column_names:
-                try:
-                    # Remove the Audio feature to prevent automatic decoding
-                    data = data.cast_column(audio_column, feature=None)
-                except:
-                    pass  # If casting fails, proceed anyway
+            if progress_callback:
+                progress_callback(f"📂 Found audio column: '{audio_column}'")
             
             total_samples = len(data)
             if max_samples:
@@ -429,40 +424,40 @@ class DatasetService:
             
             for idx in range(total_samples):
                 try:
-                    sample = data[idx]
+                    # Get raw sample data WITHOUT accessing audio column (avoids torchcodec)
+                    # Access the underlying Arrow data directly
+                    sample_data = data._data.table.slice(idx, 1).to_pydict()
                     
-                    # Extract audio
-                    audio_data = sample[audio_column]
+                    # Get the audio column data
+                    audio_data = sample_data[audio_column][0] if audio_column in sample_data else None
                     
-                    # Handle different audio formats
-                    if isinstance(audio_data, dict):
-                        # Check if it has 'path' or 'bytes' keys (raw data from datasets)
-                        if 'path' in audio_data and audio_data['path']:
-                            # Load from file path
-                            audio_array, sample_rate = librosa.load(audio_data['path'], sr=None)
-                        elif 'bytes' in audio_data and audio_data['bytes']:
-                            # Decode from bytes
-                            import io
-                            audio_bytes = io.BytesIO(audio_data['bytes'])
-                            audio_array, sample_rate = sf.read(audio_bytes)
-                        elif 'array' in audio_data:
-                            # Already decoded format: {'array': ndarray, 'sampling_rate': int}
-                            audio_array = audio_data['array']
-                            sample_rate = audio_data.get('sampling_rate', 22050)
-                        else:
-                            logger.warning(f"Unknown dict audio format for sample {idx}: {audio_data.keys()}")
-                            continue
-                    elif isinstance(audio_data, str):
-                        # File path - load it
-                        audio_array, sample_rate = librosa.load(audio_data, sr=None)
-                    elif isinstance(audio_data, bytes):
-                        # Raw bytes - decode it
-                        import io
-                        audio_bytes = io.BytesIO(audio_data)
-                        audio_array, sample_rate = sf.read(audio_bytes)
-                    else:
-                        logger.warning(f"Unknown audio format for sample {idx}: {type(audio_data)}")
+                    if audio_data is None:
+                        logger.warning(f"No audio data for sample {idx}")
                         continue
+                    
+                    # The audio column in Parquet datasets contains file paths or bytes
+                    audio_path_to_load = None
+                    
+                    if isinstance(audio_data, dict):
+                        # Check for 'path' key which contains the cached file path
+                        if 'path' in audio_data and audio_data['path']:
+                            audio_path_to_load = audio_data['path']
+                        elif 'bytes' in audio_data and audio_data['bytes']:
+                            # Write bytes to temp file and load
+                            import tempfile
+                            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                                tmp.write(audio_data['bytes'])
+                                audio_path_to_load = tmp.name
+                    elif isinstance(audio_data, str):
+                        # Direct file path
+                        audio_path_to_load = audio_data
+                    
+                    if not audio_path_to_load:
+                        logger.warning(f"Could not find audio path for sample {idx}: {type(audio_data)}")
+                        continue
+                    
+                    # Load audio with librosa (no torchcodec needed)
+                    audio_array, sample_rate = librosa.load(audio_path_to_load, sr=None)
                     
                     # Save audio file
                     audio_filename = f"sample_{idx:06d}.wav"
@@ -479,9 +474,11 @@ class DatasetService:
                     }
                     
                     # Extract additional metadata from dataset
-                    for key in sample.keys():
-                        if key != audio_column and not isinstance(sample[key], (dict, list)):
-                            metadata[key] = sample[key]
+                    for key in sample_data.keys():
+                        if key != audio_column and sample_data[key]:
+                            value = sample_data[key][0]
+                            if not isinstance(value, (dict, list)):
+                                metadata[key] = value
                     
                     # Add to train or val set
                     if idx < num_train:
