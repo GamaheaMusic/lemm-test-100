@@ -1811,8 +1811,6 @@ with gr.Blocks(
                                 "ESC-50 Environmental Sounds",
                                 "UrbanSound8K (urban sounds)"
                             ],
-                                "UrbanSound8K (urban sounds)"
-                            ],
                             label="Select Vocal/Sound Datasets",
                             info="Verified working vocal and sound datasets"
                         )
