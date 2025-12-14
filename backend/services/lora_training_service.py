@@ -303,23 +303,22 @@ class LoRATrainingService:
             )
             
             # Create data loaders
-            # Only use pin_memory if CUDA is actually available
-            use_pin_memory = torch.cuda.is_available()
-            
+            # Disable pin_memory and num_workers for compatibility with ZeroGPU and CPU
+            # pin_memory requires persistent CUDA access which ZeroGPU doesn't provide at this stage
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=self.training_config['batch_size'],
                 shuffle=True,
-                num_workers=2,
-                pin_memory=use_pin_memory
+                num_workers=0,
+                pin_memory=False
             )
             
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=self.training_config['batch_size'],
                 shuffle=False,
-                num_workers=2,
-                pin_memory=use_pin_memory
+                num_workers=0,
+                pin_memory=False
             )
             
             # Initialize model (placeholder - actual implementation would load DiffRhythm2)
