@@ -1425,7 +1425,7 @@ def delete_lora(lora_name):
         return f"❌ Error: {str(e)}"
 
 def download_lora(lora_name):
-    """Export LoRA adapter as zip file"""
+    """Export LoRA adapter as zip file for download"""
     try:
         if not lora_name:
             return None, "❌ No LoRA selected"
@@ -1436,7 +1436,8 @@ def download_lora(lora_name):
         zip_path = lora_service.export_lora_adapter(lora_name)
         
         if zip_path:
-            return zip_path, f"✅ LoRA exported: {lora_name}.zip"
+            # Return the file path for Gradio to handle the download
+            return zip_path, f"✅ Ready to download: {lora_name}.zip (click the file above to download)"
         else:
             return None, f"❌ Failed to export: {lora_name}"
         
@@ -2208,7 +2209,7 @@ with gr.Blocks(
                     download_lora_btn = gr.Button("⬇️ Download", variant="primary", size="sm")
                     delete_lora_btn = gr.Button("🗑️ Delete", variant="stop", size="sm")
                 
-                lora_download_file = gr.File(label="Downloaded LoRA", visible=False, interactive=False)
+                lora_download_file = gr.File(label="Downloaded LoRA", interactive=False)
                 lora_action_status = gr.Textbox(label="Action Status", lines=1, interactive=False)
                 
                 gr.Markdown("---")
