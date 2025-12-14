@@ -907,6 +907,68 @@ def check_downloaded_datasets():
         logger.error(f"Error checking datasets: {e}", exc_info=True)
         return f"❌ Error checking datasets: {str(e)}"
 
+def get_dataset_choices_with_status():
+    """Get dataset choices with download/preparation status indicators"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        
+        dataset_service = DatasetService()
+        downloaded = dataset_service.get_downloaded_datasets()
+        
+        # Dataset display mappings
+        dataset_display_map = {
+            "gtzan": "GTZAN Music Genre (1000 tracks, 10 genres)",
+            "musicnet": "MusicNet Classical (3.5GB, note annotations)",
+            "medley_solos": "Medley-solos-DB (solo instruments)",
+            "jamendo": "MTG-Jamendo (55k tracks, music tagging)",
+            "fma_small": "Free Music Archive Small (8k tracks)",
+            "musiccaps": "MusicCaps (5.5k clips with descriptions)",
+            "fleurs": "FLEURS English Speech (multi-speaker)",
+            "librispeech": "LibriSpeech ASR (speech recognition)",
+            "libritts": "LibriTTS (audiobooks for TTS)",
+            "audioset_strong": "AudioSet Strong (labeled audio events)",
+            "esc50": "ESC-50 Environmental Sounds",
+            "urbansound8k": "UrbanSound8K (urban sounds)"
+        }
+        
+        music_choices = []
+        vocal_choices = []
+        prepare_choices = []
+        
+        music_keys = ["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps"]
+        vocal_keys = ["fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]
+        
+        for key in music_keys:
+            display_name = dataset_display_map.get(key, key)
+            if key in downloaded:
+                info = downloaded[key]
+                if info.get('prepared'):
+                    music_choices.append(f"✅ {display_name} [Downloaded & Prepared]")
+                    prepare_choices.append(f"✅ {key} [Already Prepared]")
+                else:
+                    music_choices.append(f"📥 {display_name} [Downloaded]")
+                    prepare_choices.append(key)
+            else:
+                music_choices.append(display_name)
+        
+        for key in vocal_keys:
+            display_name = dataset_display_map.get(key, key)
+            if key in downloaded:
+                info = downloaded[key]
+                if info.get('prepared'):
+                    vocal_choices.append(f"✅ {display_name} [Downloaded & Prepared]")
+                else:
+                    vocal_choices.append(f"📥 {display_name} [Downloaded]")
+            else:
+                vocal_choices.append(display_name)
+        
+        return music_choices, vocal_choices, prepare_choices
+        
+    except Exception as e:
+        logger.error(f"Error getting dataset status: {e}", exc_info=True)
+        # Return default choices on error
+        return [], [], []
+
 def download_prepare_datasets(vocal_datasets, symbolic_datasets):
     """Download and prepare curated datasets for training"""
     try:
@@ -923,7 +985,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         
         dataset_service = DatasetService()
         
-        # Map display names to dataset keys
+        # Map display names to dataset keys (handle status indicators)
         dataset_map = {
             # Music datasets
             "GTZAN Music Genre (1000 tracks, 10 genres)": "gtzan",
@@ -941,21 +1003,36 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
             "UrbanSound8K (urban sounds)": "urbansound8k"
         }
         
+        # Extract dataset keys from selected items (strip status indicators)
+        dataset_keys = []
+        for item in selected_datasets:
+            # Remove status prefixes and suffixes
+            clean_item = item.replace("✅ ", "").replace("📥 ", "")
+            clean_item = clean_item.split(" [")[0]  # Remove [Downloaded] or [Prepared] suffix
+            
+            if clean_item in dataset_map:
+                dataset_keys.append(dataset_map[clean_item])
+            else:
+                # Direct key match
+                if clean_item in ["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+                                   "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]:
+                    dataset_keys.append(clean_item)
+        
+        if not dataset_keys:
+            return "❌ No valid datasets selected."
+        
         status_messages = []
-        status_messages.append(f"📥 Starting download for {len(selected_datasets)} dataset(s)...\n")
+        status_messages.append(f"📥 Starting download for {len(dataset_keys)} dataset(s)...\n")
         
         success_count = 0
         already_downloaded_count = 0
         manual_count = 0
         error_count = 0
         
-        for dataset_display_name in selected_datasets:
-            dataset_key = dataset_map.get(dataset_display_name)
-            
-            if not dataset_key:
-                status_messages.append(f"⚠️ Unknown dataset: {dataset_display_name}\n")
-                error_count += 1
-                continue
+        for dataset_key in dataset_keys:
+            # Get display name for this key
+            dataset_config = dataset_service.DATASETS.get(dataset_key, {})
+            dataset_display_name = dataset_config.get('name', dataset_key)
             
             status_messages.append(f"\n{'='*60}")
             status_messages.append(f"📦 Processing: {dataset_display_name}")
@@ -1020,17 +1097,25 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
         
         dataset_service = DatasetService()
         
+        # Extract dataset keys (remove status indicators)
+        dataset_keys = []
+        for item in selected_datasets:
+            # Remove status prefix if present
+            clean_item = item.replace("✅ ", "").replace("📥 ", "").split(" [")[0]
+            dataset_keys.append(clean_item)
+        
         status_messages = []
-        status_messages.append(f"🔧 Preparing {len(selected_datasets)} dataset(s) for training...\n")
+        status_messages.append(f"🔧 Preparing {len(dataset_keys)} dataset(s) for training...\n")
         
         success_count = 0
+        already_prepared_count = 0
         error_count = 0
         
         max_samples = int(max_samples_per_dataset) if max_samples_per_dataset > 0 else None
         
-        for dataset_name in selected_datasets:
+        for dataset_key in dataset_keys:
             status_messages.append(f"\n{'='*60}")
-            status_messages.append(f"🔧 Preparing: {dataset_name}")
+            status_messages.append(f"🔧 Preparing: {dataset_key}")
             status_messages.append(f"{'='*60}\n")
             
             # Progress callback
@@ -1040,7 +1125,7 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
             
             # Prepare dataset
             result = dataset_service.prepare_dataset_for_training(
-                dataset_name,
+                dataset_key,
                 train_val_split=0.8,
                 max_samples=max_samples,
                 progress_callback=progress_callback
@@ -1052,6 +1137,7 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
             
             if result.get('success'):
                 if result.get('already_prepared'):
+                    already_prepared_count += 1
                     status_messages.append(f"\n   ℹ️ Dataset was already prepared")
                 else:
                     success_count += 1
@@ -1066,6 +1152,7 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
         status_messages.append(f"\n{'='*60}")
         status_messages.append(f"Summary:")
         status_messages.append(f"  ✅ Successfully prepared: {success_count}")
+        status_messages.append(f"  ℹ️ Already prepared: {already_prepared_count}")
         status_messages.append(f"  ❌ Errors: {error_count}")
         status_messages.append(f"{'='*60}")
         
@@ -1078,6 +1165,32 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
     except Exception as e:
         logger.error(f"Dataset preparation failed: {e}", exc_info=True)
         return f"❌ Error: {str(e)}"
+
+def refresh_dataset_status():
+    """Refresh dataset status and return updated choices"""
+    music_choices, vocal_choices, prepare_choices = get_dataset_choices_with_status()
+    return (
+        gr.update(choices=music_choices if music_choices else [
+            "GTZAN Music Genre (1000 tracks, 10 genres)",
+            "MusicNet Classical (3.5GB, note annotations)",
+            "Medley-solos-DB (solo instruments)",
+            "MTG-Jamendo (55k tracks, music tagging)",
+            "Free Music Archive Small (8k tracks)",
+            "MusicCaps (5.5k clips with descriptions)"
+        ]),
+        gr.update(choices=vocal_choices if vocal_choices else [
+            "FLEURS English Speech (multi-speaker)",
+            "LibriSpeech ASR (speech recognition)",
+            "LibriTTS (audiobooks for TTS)",
+            "AudioSet Strong (labeled audio events)",
+            "ESC-50 Environmental Sounds",
+            "UrbanSound8K (urban sounds)"
+        ]),
+        gr.update(choices=prepare_choices if prepare_choices else [
+            "gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+            "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"
+        ])
+    )
 
 def prepare_user_training_dataset(audio_files, metadata_table, split_clips, separate_stems):
     """Prepare user audio dataset for training"""
@@ -1670,6 +1783,9 @@ with gr.Blocks(
             with gr.Tab("📚 Dataset Training"):
                 gr.Markdown("### Pre-curated Dataset Training")
                 gr.Markdown("Select datasets from the categories below. All datasets can be used for music generation training.")
+                gr.Markdown("**Datasets persist across sessions** - once downloaded/prepared, they remain available.")
+                
+                refresh_datasets_status_btn = gr.Button("🔄 Refresh Dataset Status", size="sm", variant="secondary")
                 
                 with gr.Row():
                     with gr.Column():
@@ -1934,10 +2050,20 @@ with gr.Blocks(
                 )
     
     # LoRA Training Event Handlers
+    refresh_datasets_status_btn.click(
+        fn=refresh_dataset_status,
+        inputs=[],
+        outputs=[vocal_datasets, symbolic_datasets, prepare_datasets_selector]
+    )
+    
     dataset_download_btn.click(
         fn=download_prepare_datasets,
         inputs=[vocal_datasets, symbolic_datasets],
         outputs=[dataset_status]
+    ).then(
+        fn=refresh_dataset_status,
+        inputs=[],
+        outputs=[vocal_datasets, symbolic_datasets, prepare_datasets_selector]
     )
     
     check_status_btn.click(
@@ -1950,6 +2076,10 @@ with gr.Blocks(
         fn=prepare_datasets_for_training,
         inputs=[prepare_datasets_selector, max_samples_slider],
         outputs=[hf_prepare_status]
+    ).then(
+        fn=refresh_dataset_status,
+        inputs=[],
+        outputs=[vocal_datasets, symbolic_datasets, prepare_datasets_selector]
     )
     
     analyze_audio_btn.click(
