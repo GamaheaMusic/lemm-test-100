@@ -44,13 +44,6 @@ class DatasetService:
             'description': 'Multi-speaker English audiobook corpus for TTS',
             'size_gb': 35.0
         },
-        'musiccaps': {
-            'name': 'MusicCaps',
-            'type': 'music',
-            'hf_id': 'google/MusicCaps',
-            'description': 'Music audio captioning with 5.5k clips and text descriptions',
-            'size_gb': 5.5
-        },
         'audioset_strong': {
             'name': 'AudioSet Strong',
             'type': 'music',
