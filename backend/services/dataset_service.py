@@ -630,3 +630,125 @@ class DatasetService:
                 'error': str(e),
                 'dataset': dataset_key
             }
+    
+    def export_prepared_dataset(self, dataset_key: str) -> Optional[str]:
+        """
+        Export a prepared dataset as a zip file for download
+        
+        Args:
+            dataset_key: Key of the dataset to export
+            
+        Returns:
+            Path to the exported zip file, or None if failed
+        """
+        try:
+            import shutil
+            
+            dataset_dir = self.base_dir / dataset_key
+            metadata_path = dataset_dir / 'dataset_info.json'
+            
+            if not metadata_path.exists():
+                logger.error(f"Dataset not found: {dataset_key}")
+                return None
+            
+            # Check if dataset is prepared
+            with open(metadata_path) as f:
+                metadata = json.load(f)
+            
+            if not metadata.get('prepared', False):
+                logger.error(f"Dataset not prepared: {dataset_key}")
+                return None
+            
+            # Create exports directory
+            exports_dir = Path("outputs/dataset_exports")
+            exports_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create zip file
+            zip_path = exports_dir / f"{dataset_key}.zip"
+            
+            # Remove existing zip if present
+            if zip_path.exists():
+                zip_path.unlink()
+            
+            # Create zip archive of the entire dataset directory
+            shutil.make_archive(
+                str(exports_dir / dataset_key),
+                'zip',
+                str(dataset_dir)
+            )
+            
+            logger.info(f"Exported dataset to: {zip_path}")
+            return str(zip_path)
+            
+        except Exception as e:
+            logger.error(f"Failed to export dataset {dataset_key}: {str(e)}")
+            return None
+    
+    def import_prepared_dataset(self, zip_path: str) -> Optional[str]:
+        """
+        Import a prepared dataset from a zip file
+        
+        Args:
+            zip_path: Path to the zip file to import
+            
+        Returns:
+            Key of the imported dataset, or None if failed
+        """
+        try:
+            import shutil
+            import zipfile
+            import tempfile
+            
+            # Validate zip file
+            if not Path(zip_path).exists():
+                logger.error(f"Zip file not found: {zip_path}")
+                return None
+            
+            # Extract to temporary directory
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                # Find the dataset directory
+                temp_path = Path(temp_dir)
+                dataset_dirs = [d for d in temp_path.iterdir() if d.is_dir()]
+                
+                if not dataset_dirs:
+                    logger.error("No dataset directory found in zip")
+                    return None
+                
+                dataset_dir = dataset_dirs[0]
+                
+                # Validate it has dataset_info.json
+                metadata_path = dataset_dir / 'dataset_info.json'
+                if not metadata_path.exists():
+                    logger.error("Invalid dataset: missing dataset_info.json")
+                    return None
+                
+                # Read metadata to get dataset key
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+                
+                # Use original key or generate new one for user datasets
+                if 'source' in metadata and metadata['source'] == 'user_upload':
+                    dataset_key = dataset_dir.name
+                else:
+                    # For HF datasets, check if it's a known key
+                    dataset_key = metadata.get('dataset_key', dataset_dir.name)
+                
+                # Target path
+                target_path = self.base_dir / dataset_key
+                
+                # Remove existing if present
+                if target_path.exists():
+                    shutil.rmtree(target_path)
+                
+                # Move directory
+                shutil.copytree(dataset_dir, target_path)
+                
+                logger.info(f"Imported dataset: {dataset_key}")
+                return dataset_key
+                
+        except Exception as e:
+            logger.error(f"Failed to import dataset from {zip_path}: {str(e)}")
+            return None

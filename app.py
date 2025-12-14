@@ -7,6 +7,7 @@ import sys
 import gradio as gr
 import logging
 from pathlib import Path
+from datetime import datetime
 import shutil
 import subprocess
 import json
@@ -1439,6 +1440,107 @@ def delete_lora(lora_name):
         logger.error(f"Failed to delete LoRA: {e}")
         return f"❌ Error: {str(e)}"
 
+def download_lora(lora_name):
+    """Export LoRA adapter as zip file"""
+    try:
+        if not lora_name:
+            return None, "❌ No LoRA selected"
+        
+        from backend.services.lora_training_service import LoRATrainingService
+        lora_service = LoRATrainingService()
+        
+        zip_path = lora_service.export_lora_adapter(lora_name)
+        
+        if zip_path:
+            return zip_path, f"✅ LoRA exported: {lora_name}.zip"
+        else:
+            return None, f"❌ Failed to export: {lora_name}"
+        
+    except Exception as e:
+        logger.error(f"Failed to export LoRA: {e}")
+        return None, f"❌ Error: {str(e)}"
+
+def upload_lora(zip_file):
+    """Import LoRA adapter from zip file"""
+    try:
+        if not zip_file:
+            return "❌ No file selected"
+        
+        from backend.services.lora_training_service import LoRATrainingService
+        lora_service = LoRATrainingService()
+        
+        lora_name = lora_service.import_lora_adapter(zip_file)
+        
+        if lora_name:
+            return f"✅ Imported LoRA adapter: {lora_name}"
+        else:
+            return "❌ Failed to import LoRA"
+        
+    except Exception as e:
+        logger.error(f"Failed to import LoRA: {e}")
+        return f"❌ Error: {str(e)}"
+
+def export_dataset(dataset_key):
+    """Export prepared dataset as zip file"""
+    try:
+        if not dataset_key:
+            return None, "❌ No dataset selected"
+        
+        from backend.services.dataset_service import DatasetService
+        dataset_service = DatasetService()
+        
+        zip_path = dataset_service.export_prepared_dataset(dataset_key)
+        
+        if zip_path:
+            return zip_path, f"✅ Dataset exported: {dataset_key}.zip"
+        else:
+            return None, f"❌ Failed to export: {dataset_key}"
+        
+    except Exception as e:
+        logger.error(f"Failed to export dataset: {e}")
+        return None, f"❌ Error: {str(e)}"
+
+def import_dataset(zip_file):
+    """Import prepared dataset from zip file"""
+    try:
+        if not zip_file:
+            return "❌ No file selected"
+        
+        from backend.services.dataset_service import DatasetService
+        dataset_service = DatasetService()
+        
+        dataset_key = dataset_service.import_prepared_dataset(zip_file)
+        
+        if dataset_key:
+            return f"✅ Imported dataset: {dataset_key}"
+        else:
+            return "❌ Failed to import dataset"
+        
+    except Exception as e:
+        logger.error(f"Failed to import dataset: {e}")
+        return f"❌ Error: {str(e)}"
+
+def refresh_export_dataset_list():
+    """Refresh list of datasets available for export"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        dataset_service = DatasetService()
+        
+        # Get all available datasets (both HF and user)
+        all_datasets = dataset_service.get_all_available_datasets()
+        
+        # Filter to only prepared datasets
+        prepared = []
+        for key, info in all_datasets.items():
+            if info.get('prepared', False):
+                prepared.append(key)
+        
+        return gr.Dropdown(choices=prepared)
+        
+    except Exception as e:
+        logger.error(f"Failed to refresh export list: {e}")
+        return gr.Dropdown(choices=[])
+
 # Create Gradio interface
 with gr.Blocks(
     title="🎵 Music Generation Studio",
@@ -1958,6 +2060,27 @@ with gr.Blocks(
                 
                 prepare_user_dataset_btn = gr.Button("📦 Prepare Training Dataset", variant="primary")
                 user_prepare_status = gr.Textbox(label="Preparation Status", lines=2, interactive=False)
+                
+                gr.Markdown("---")
+                gr.Markdown("### 📤 Dataset Import/Export")
+                
+                with gr.Row():
+                    dataset_to_export = gr.Dropdown(
+                        choices=[],
+                        label="Select Dataset to Export",
+                        info="Download prepared datasets"
+                    )
+                    export_dataset_btn = gr.Button("⬇️ Export Dataset", variant="primary", size="sm")
+                
+                with gr.Row():
+                    import_dataset_file = gr.File(
+                        label="Import Dataset (.zip)",
+                        file_types=[".zip"],
+                        type="filepath"
+                    )
+                
+                dataset_download_file = gr.File(label="Downloaded Dataset", visible=True, interactive=False)
+                dataset_export_status = gr.Textbox(label="Export/Import Status", lines=2, interactive=False)
             
             # Tab 3: Training Configuration
             with gr.Tab("⚙️ Training Configuration"):
@@ -2062,9 +2185,14 @@ with gr.Blocks(
                         label="Select LoRA",
                         scale=2
                     )
+                
+                with gr.Row():
+                    download_lora_btn = gr.Button("⬇️ Download LoRA", variant="primary", size="sm")
+                    upload_lora_file = gr.File(label="Upload LoRA (.zip)", file_types=[".zip"], type="filepath")
                     delete_lora_btn = gr.Button("🗑️ Delete LoRA", variant="stop", size="sm")
                 
-                lora_management_status = gr.Textbox(label="Status", lines=1, interactive=False)
+                lora_download_file = gr.File(label="Downloaded LoRA", visible=True, interactive=False)
+                lora_management_status = gr.Textbox(label="Status", lines=2, interactive=False)
                 
                 gr.Markdown("---")
                 gr.Markdown(
@@ -2192,6 +2320,46 @@ with gr.Blocks(
         fn=refresh_lora_list,
         inputs=[],
         outputs=[lora_list, selected_lora]
+    )
+    
+    download_lora_btn.click(
+        fn=download_lora,
+        inputs=[selected_lora],
+        outputs=[lora_download_file, lora_management_status]
+    )
+    
+    upload_lora_file.change(
+        fn=upload_lora,
+        inputs=[upload_lora_file],
+        outputs=[lora_management_status]
+    ).then(
+        fn=refresh_lora_list,
+        inputs=[],
+        outputs=[lora_list, selected_lora]
+    )
+    
+    export_dataset_btn.click(
+        fn=export_dataset,
+        inputs=[dataset_to_export],
+        outputs=[dataset_download_file, dataset_export_status]
+    )
+    
+    import_dataset_file.change(
+        fn=import_dataset,
+        inputs=[import_dataset_file],
+        outputs=[dataset_export_status]
+    ).then(
+        fn=refresh_dataset_status,
+        inputs=[],
+        outputs=[vocal_datasets, symbolic_datasets, prepare_datasets_selector]
+    ).then(
+        fn=refresh_dataset_list,
+        inputs=[],
+        outputs=[selected_dataset]
+    ).then(
+        fn=refresh_export_dataset_list,
+        inputs=[],
+        outputs=[dataset_to_export]
     )
     
     # Help section

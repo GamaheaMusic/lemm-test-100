@@ -604,3 +604,107 @@ class LoRATrainingService:
             'recent_loss': self.training_loss[-10:] if self.training_loss else [],
             'config': self.training_config
         }
+    
+    def export_lora_adapter(self, lora_name: str) -> Optional[str]:
+        """
+        Export a LoRA adapter as a zip file for download
+        
+        Args:
+            lora_name: Name of the LoRA adapter to export
+            
+        Returns:
+            Path to the exported zip file, or None if failed
+        """
+        try:
+            import shutil
+            import tempfile
+            
+            lora_path = self.lora_dir / lora_name
+            
+            if not lora_path.exists():
+                logger.error(f"LoRA adapter not found: {lora_name}")
+                return None
+            
+            # Create exports directory if it doesn't exist
+            exports_dir = Path("outputs/lora_exports")
+            exports_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create zip file
+            zip_path = exports_dir / f"{lora_name}.zip"
+            
+            # Remove existing zip if present
+            if zip_path.exists():
+                zip_path.unlink()
+            
+            # Create zip archive
+            shutil.make_archive(
+                str(exports_dir / lora_name),
+                'zip',
+                str(lora_path)
+            )
+            
+            logger.info(f"Exported LoRA adapter to: {zip_path}")
+            return str(zip_path)
+            
+        except Exception as e:
+            logger.error(f"Failed to export LoRA adapter {lora_name}: {str(e)}")
+            return None
+    
+    def import_lora_adapter(self, zip_path: str) -> Optional[str]:
+        """
+        Import a LoRA adapter from a zip file
+        
+        Args:
+            zip_path: Path to the zip file to import
+            
+        Returns:
+            Name of the imported LoRA adapter, or None if failed
+        """
+        try:
+            import shutil
+            import zipfile
+            import tempfile
+            
+            # Validate zip file
+            if not Path(zip_path).exists():
+                logger.error(f"Zip file not found: {zip_path}")
+                return None
+            
+            # Extract to temporary directory
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                # Find the LoRA directory (should be the only directory in the zip)
+                temp_path = Path(temp_dir)
+                lora_dirs = [d for d in temp_path.iterdir() if d.is_dir()]
+                
+                if not lora_dirs:
+                    # Files might be directly in the zip
+                    lora_name = Path(zip_path).stem
+                    target_path = self.lora_dir / lora_name
+                    
+                    # Copy files
+                    target_path.mkdir(parents=True, exist_ok=True)
+                    for file in temp_path.iterdir():
+                        if file.is_file():
+                            shutil.copy2(file, target_path)
+                else:
+                    # Use the directory name from the zip
+                    lora_dir = lora_dirs[0]
+                    lora_name = lora_dir.name
+                    target_path = self.lora_dir / lora_name
+                    
+                    # Remove existing if present
+                    if target_path.exists():
+                        shutil.rmtree(target_path)
+                    
+                    # Move directory
+                    shutil.copytree(lora_dir, target_path)
+                
+                logger.info(f"Imported LoRA adapter: {lora_name}")
+                return lora_name
+                
+        except Exception as e:
+            logger.error(f"Failed to import LoRA adapter from {zip_path}: {str(e)}")
+            return None
