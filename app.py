@@ -53,6 +53,7 @@ try:
     from services.lyricmind_service import LyricMindService
     from services.timeline_service import TimelineService
     from services.export_service import ExportService
+    from services.hf_storage_service import HFStorageService
     from config.settings import Config
     from utils.prompt_analyzer import PromptAnalyzer
 except ImportError as e:
@@ -72,6 +73,15 @@ os.makedirs("logs", exist_ok=True)
 # Initialize services - these persist at module level
 timeline_service = TimelineService()
 export_service = ExportService()
+
+# Initialize HF storage and sync training data
+hf_storage = HFStorageService(repo_id="Gamahea/lemm-dataset")
+logger.info("🔄 Syncing training data from HuggingFace repo...")
+sync_result = hf_storage.sync_on_startup(
+    loras_dir=Path("models/loras"),
+    datasets_dir=Path("training_data")
+)
+logger.info(f"✅ Synced {len(sync_result['loras'])} LoRAs and {len(sync_result['datasets'])} datasets")
 
 # Lazy-load AI services (heavy models)
 diffrhythm_service = None
@@ -1172,6 +1182,16 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
         if success_count > 0:
             status_messages.append(f"\n✅ Datasets are now ready for LoRA training!")
             status_messages.append(f"💡 Go to 'Training Configuration' tab to start training")
+            
+            # Upload prepared datasets to HF repo
+            status_messages.append(f"\n📤 Uploading prepared datasets to HuggingFace repo...")
+            upload_count = 0
+            for dataset_key in datasets_to_process:
+                dataset_dir = Path("training_data") / dataset_key
+                if dataset_dir.exists():
+                    if hf_storage.upload_dataset(dataset_dir):
+                        upload_count += 1
+            status_messages.append(f"✅ Uploaded {upload_count} dataset(s) to repo")
         
         return "\n".join(status_messages)
         
@@ -1357,6 +1377,16 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
         progress += f"\n✅ Training complete!\nFinal validation loss: {results['final_val_loss']:.4f}"
         log += f"\n\nTraining Results:\n{json.dumps(results, indent=2)}"
         
+        # Upload trained LoRA to HF repo
+        progress += "\n\n📤 Uploading LoRA to HuggingFace repo..."
+        lora_dir = Path("models/loras") / lora_name
+        if lora_dir.exists():
+            upload_success = hf_storage.upload_lora(lora_dir)
+            if upload_success:
+                progress += "\n✅ LoRA uploaded to repo successfully!"
+            else:
+                progress += "\n⚠️ LoRA trained but upload failed (saved locally)"
+        
         return progress, log
         
     except Exception as e:
@@ -1532,17 +1562,16 @@ def refresh_export_dataset_list():
 
 # Create Gradio interface
 with gr.Blocks(
-    title="🎵 Music Generation Studio",
+    title="LEMM - Let Everyone Make Music v1.0.0 (beta)",
     theme=gr.themes.Soft(primary_hue="purple", secondary_hue="pink")
 ) as app:
     
     gr.Markdown(
         """
-        # 🎵 Music Generation Studio
+        # 🎵 LEMM - Let Everyone Make Music
+        **Version 1.0.0 (beta)**
         
-        Create AI-powered music with DiffRhythm2 and LyricMind AI
-        
-        💡 **Tip**: Start with 10-20 second clips for faster generation with ZeroGPU
+        Advanced AI music generator with built-in training, EQ, Mastering, and Super Resolution. Training data is stored safely on a separate repo for download / reuse.
         """
     )
     
