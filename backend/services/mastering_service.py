@@ -436,19 +436,6 @@ class MasteringService:
     def __init__(self):
         """Initialize mastering service"""
         logger.info("Mastering service initialized")
-            "Retro 80s",
-            "80s digital warmth and punch",
-            [
-                HighpassFilter(cutoff_frequency_hz=35),
-                LowShelfFilter(cutoff_frequency_hz=100, gain_db=1.5, q=0.7),
-                PeakFilter(cutoff_frequency_hz=800, gain_db=1.0, q=1.0),
-                PeakFilter(cutoff_frequency_hz=3000, gain_db=2.0, q=1.2),
-                PeakFilter(cutoff_frequency_hz=8000, gain_db=1.5, q=1.0),
-                HighShelfFilter(cutoff_frequency_hz=10000, gain_db=1.0, q=0.8),
-                Compressor(threshold_db=-10, ratio=4.0, attack_ms=5, release_ms=100),
-                Limiter(threshold_db=-0.5, release_ms=80)
-            ]
-        ),
         
         # Specialized Presets
         "vocal_focused": MasteringPreset(
