@@ -30,13 +30,6 @@ class DatasetService:
             'description': 'Freesound Dataset with 51K audio clips and 200 sound classes',
             'size_gb': 30.0
         },
-        'jamendo': {
-            'name': 'MTG-Jamendo Dataset',
-            'type': 'music',
-            'hf_id': 'MTG/jamendo-dataset',
-            'description': 'Music tagging dataset with 55k tracks',
-            'size_gb': 25.0
-        },
         'librispeech': {
             'name': 'LibriSpeech ASR',
             'type': 'vocal',
