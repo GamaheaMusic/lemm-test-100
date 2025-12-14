@@ -1735,7 +1735,7 @@ with gr.Blocks(
                 )
                 
                 prepare_btn = gr.Button("🔧 Prepare Datasets for Training", variant="primary")
-                prepare_status = gr.Textbox(
+                hf_prepare_status = gr.Textbox(
                     label="Preparation Status",
                     lines=15,
                     max_lines=25,
@@ -1789,7 +1789,7 @@ with gr.Blocks(
                 metadata_status = gr.Textbox(label="Metadata Status", lines=1, interactive=False)
                 
                 prepare_user_dataset_btn = gr.Button("📦 Prepare Training Dataset", variant="primary")
-                prepare_status = gr.Textbox(label="Preparation Status", lines=2, interactive=False)
+                user_prepare_status = gr.Textbox(label="Preparation Status", lines=2, interactive=False)
             
             # Tab 3: Training Configuration
             with gr.Tab("⚙️ Training Configuration"):
@@ -1949,7 +1949,7 @@ with gr.Blocks(
     prepare_btn.click(
         fn=prepare_datasets_for_training,
         inputs=[prepare_datasets_selector, max_samples_slider],
-        outputs=[prepare_status]
+        outputs=[hf_prepare_status]
     )
     
     analyze_audio_btn.click(
@@ -1967,7 +1967,7 @@ with gr.Blocks(
     prepare_user_dataset_btn.click(
         fn=prepare_user_training_dataset,
         inputs=[user_audio_upload, metadata_table, split_to_clips, separate_stems],
-        outputs=[prepare_status]
+        outputs=[user_prepare_status]
     )
     
     refresh_datasets_btn.click(
