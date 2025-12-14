@@ -23,33 +23,12 @@ class DatasetService:
             'description': 'Music genre classification dataset (GTZAN-based)',
             'size_gb': 1.2
         },
-        'musicnet': {
-            'name': 'MusicNet Classical Music',
-            'type': 'music',
-            'hf_id': 'roszcz/musicnet',
-            'description': 'Classical music recordings with note-level annotations',
-            'size_gb': 3.5
-        },
-        'medley_solos': {
-            'name': 'Medley-solos-DB',
-            'type': 'music',
-            'hf_id': 'ccmusic-database/medley-solos-db',
-            'description': 'Solo instrument recordings across various instruments',
-            'size_gb': 2.8
-        },
         'jamendo': {
             'name': 'MTG-Jamendo Dataset',
             'type': 'music',
             'hf_id': 'MTG/jamendo-dataset',
             'description': 'Music tagging dataset with 55k tracks',
             'size_gb': 25.0
-        },
-        'fma_small': {
-            'name': 'Free Music Archive (Small)',
-            'type': 'music',
-            'hf_id': 'rudraml/fma-small',
-            'description': 'FMA dataset - 8k tracks, 8 genres, verified working',
-            'size_gb': 7.2
         },
         'fleurs': {
             'name': 'FLEURS Speech Dataset',

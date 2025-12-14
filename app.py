@@ -918,10 +918,7 @@ def get_dataset_choices_with_status():
         # Dataset display mappings
         dataset_display_map = {
             "gtzan": "GTZAN Music Genre (1000 tracks, 10 genres)",
-            "musicnet": "MusicNet Classical (3.5GB, note annotations)",
-            "medley_solos": "Medley-solos-DB (solo instruments)",
             "jamendo": "MTG-Jamendo (55k tracks, music tagging)",
-            "fma_small": "Free Music Archive Small (8k tracks)",
             "musiccaps": "MusicCaps (5.5k clips with descriptions)",
             "fleurs": "FLEURS English Speech (multi-speaker)",
             "librispeech": "LibriSpeech ASR (speech recognition)",
@@ -935,7 +932,7 @@ def get_dataset_choices_with_status():
         vocal_choices = []
         prepare_choices = []
         
-        music_keys = ["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps"]
+        music_keys = ["gtzan", "jamendo", "musiccaps"]
         vocal_keys = ["fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]
         
         for key in music_keys:
@@ -989,10 +986,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         dataset_map = {
             # Music datasets
             "GTZAN Music Genre (1000 tracks, 10 genres)": "gtzan",
-            "MusicNet Classical (3.5GB, note annotations)": "musicnet",
-            "Medley-solos-DB (solo instruments)": "medley_solos",
             "MTG-Jamendo (55k tracks, music tagging)": "jamendo",
-            "Free Music Archive Small (8k tracks)": "fma_small",
             "MusicCaps (5.5k clips with descriptions)": "musiccaps",
             # Vocal & Sound datasets
             "FLEURS English Speech (multi-speaker)": "fleurs",
@@ -1014,7 +1008,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
                 dataset_keys.append(dataset_map[clean_item])
             else:
                 # Direct key match
-                if clean_item in ["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+                if clean_item in ["gtzan", "jamendo", "musiccaps",
                                    "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]:
                     dataset_keys.append(clean_item)
         
@@ -1172,10 +1166,7 @@ def refresh_dataset_status():
     return (
         gr.update(choices=music_choices if music_choices else [
             "GTZAN Music Genre (1000 tracks, 10 genres)",
-            "MusicNet Classical (3.5GB, note annotations)",
-            "Medley-solos-DB (solo instruments)",
             "MTG-Jamendo (55k tracks, music tagging)",
-            "Free Music Archive Small (8k tracks)",
             "MusicCaps (5.5k clips with descriptions)"
         ]),
         gr.update(choices=vocal_choices if vocal_choices else [
@@ -1187,7 +1178,7 @@ def refresh_dataset_status():
             "UrbanSound8K (urban sounds)"
         ]),
         gr.update(choices=prepare_choices if prepare_choices else [
-            "gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+            "gtzan", "jamendo", "musiccaps",
             "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"
         ])
     )
@@ -1793,10 +1784,7 @@ with gr.Blocks(
                         vocal_datasets = gr.CheckboxGroup(
                             choices=[
                                 "GTZAN Music Genre (1000 tracks, 10 genres)",
-                                "MusicNet Classical (3.5GB, note annotations)",
-                                "Medley-solos-DB (solo instruments)",
                                 "MTG-Jamendo (55k tracks, music tagging)",
-                                "Free Music Archive Small (8k tracks)",
                                 "MusicCaps (5.5k clips with descriptions)"
                             ],
                             label="Select Music Datasets",
@@ -1835,7 +1823,7 @@ with gr.Blocks(
                 gr.Markdown("After downloading, prepare datasets by extracting audio files and creating train/val splits.")
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
-                    choices=["gtzan", "musicnet", "medley_solos", "jamendo", "fma_small", "musiccaps",
+                    choices=["gtzan", "jamendo", "musiccaps",
                              "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
