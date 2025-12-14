@@ -1,253 +1,434 @@
-# Music Generation App
+# LEMM - Let Everyone Make Music
 
-An AI-powered music generation application with **AMD GPU support** using DiffRhythm2 for music generation with built-in vocals and Fish Speech for TTS.
+**Version 1.0.0 (Beta)**
 
-## ✨ Features
+An advanced AI music generation system with **training capabilities**, built-in vocals, professional mastering, and audio enhancement. Powered by DiffRhythm2 with LoRA fine-tuning support.
 
-- 🎵 **Music Generation**: Generate music clips with vocals from text prompts using DiffRhythm2
--   **Style Consistency**: Automatic style matching - new clips inherit the musical character of existing ones
-- 🎤 **Lyrics Integration**: Add your own lyrics or generate instrumental tracks
-- 🎙️ **Built-in Vocals**: DiffRhythm2 generates vocals directly with the music
-- 🎚️ **DAW-Style Timeline**: Professional horizontal timeline with tracks and playback controls
-- 🎛️ **Advanced Mastering**: 32 professional presets + custom EQ, compression, and limiting
-- 📍 **Flexible Positioning**: Place clips at Intro, Previous, Next, or Outro positions
-- 💾 **Export/Download**: Merge and download your complete compositions
-- 🎮 **AMD GPU Support**: Optimized for AMD GPUs via DirectML (Python 3.11)
-- 🖥️ **Modern Web UI**: Clean, responsive interface with real-time updates
-
-## 🎮 AMD GPU Support
-
-This application is **optimized for AMD GPUs** using PyTorch DirectML:
-- ✅ AMD Vega 8 (your current GPU)
-- ✅ AMD Radeon RX series
-- ✅ AMD Ryzen integrated graphics
-- ✅ Automatic fallback to CPU if GPU unavailable
-
-## Architecture
-
-### Interface
-- **Technology**: Gradio web interface
-- **Access**: Browser-based at http://localhost:7860
-- **Features**: Real-time updates, audio preview, timeline visualization
-
-### Backend
-- **Framework**: Python with Flask
-- **GPU Backend**: DirectML for AMD GPU acceleration
-- **Models**: 
-  - DiffRhythm2 (ASLP-lab) for music generation with vocals
-  - MuQ-MuLan for music style encoding
-- **Features**: Local model caching, robust error handling, comprehensive logging
-
-## Project Structure
-
-```
-Angen/
-├── backend/
-│   ├── app.py                 # Flask application entry point
-│   ├── config/
-│   │   ├── __init__.py
-│   │   └── settings.py        # Configuration settings
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── schemas.py         # Data models and schemas
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   ├── generation.py      # Music and lyrics generation endpoints
-│   │   ├── timeline.py        # Timeline management endpoints
-│   │   └── export.py          # Export and download endpoints
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── diffrhythm_service.py    # DiffRhythm integration
-│   │   ├── lyricmind_service.py     # LyricsMindAI integration
-│   │   ├── fish_speech_service.py   # Fish Speech integration
-│   │   ├── timeline_service.py      # Timeline management
-│   │   └── export_service.py        # Audio export service
-│   └── utils/
-│       ├── __init__.py
-│       ├── logger.py          # Logging configuration
-│       └── validators.py      # Request validation
-├── frontend/
-│   ├── index.html             # Main HTML page
-│   ├── css/
-│   │   └── style.css          # Styles
-│   └── js/
-│       └── app.js             # Frontend JavaScript
-├── requirements.txt           # Python dependencies
-├── .env.example              # Environment variables template
-├── .gitignore
-└── README.md
-
-```
-
-## Installation & Quick Start
-
-### Prerequisites
-
-- **Python 3.11** (required for AMD GPU support via DirectML)
-- pip
-- Internet connection (for first-time model download ~5-8GB)
-
-### Quick Setup
-
-**Windows:**
-```powershell
-# 1. Clone/download the project
-cd d:\2025-vibe-coding\Angen
-
-# 2. Create virtual environment with Python 3.11
-py -3.11 -m venv .venv
-
-# 3. Activate virtual environment
-.\.venv\Scripts\Activate.ps1
-
-# 4. Install dependencies
-pip install -r requirements.txt
-
-# 5. Launch the app (downloads models on first run)
-.\launch.ps1
-```
-
-**Linux/WSL:**
-```bash
-# 1. Clone/download the project
-cd ~/Angen
-
-# 2. Create virtual environment with Python 3.11
-python3.11 -m venv .venv
-
-# 3. Activate virtual environment
-source .venv/bin/activate
-
-# 4. Install dependencies
-pip install -r requirements.txt
-
-# 5. Launch the app (downloads models on first run)
-./launch.sh
-```
-
-### What the Launcher Does
-
-The launcher script (`launch.ps1` or `launch.sh`) will:
-1. Check if AI models are installed
-2. If not, prompt to download them (~5-8GB):
-   - DiffRhythm2 model (~5GB)
-   - Fish Speech TTS (~2GB)
-3. Start the backend server (Flask on port 7860)
-4. Start the frontend server (HTTP server on port 8000)
-5. Display progress and URLs
-
-**Access the application at:**
-- **Frontend**: http://localhost:8000
-- **Backend API**: http://localhost:7860
-
-## Usage
-
-### 1. Generate Music
-
-1. Enter a music prompt describing the style (e.g., "upbeat electronic dance music with heavy bass")
-2. **(Optional)** Add lyrics in the lyrics box for vocal generation
-3. Leave lyrics empty for instrumental music
-5. Set duration (10-120 seconds, default 30)
-6. Select timeline position (Intro/Previous/Next/Outro)
-7. Click **"✨ Generate Music Clip"**
-8. Preview the generated audio in the player
-
-### 2. Manage Timeline
-
-1. Switch to the **"Timeline"** tab
-2. View all generated clips with their durations
-3. Remove individual clips by entering clip number
-4. Clear entire timeline if needed
-
-### 3. Export
-
-1. Open the **"Export"** tab
-2. Enter a filename (without extension)
-3. Choose format (WAV, MP3, or FLAC)
-4. Click **"💾 Export Timeline"**
-5. Download or play the merged audio
-
-## AMD GPU Performance
-
-- **First generation**: May take 30-60 seconds (model loading)
-- **Subsequent generations**: 10-30 seconds on Vega 8
-- **CPU fallback**: 1-3 minutes per clip
-
-The app will automatically detect and use your AMD GPU via DirectML.
-
-## Technical Details
-
-### Models Used
-
-1. **MusicGen-small** (Facebook)
-   - Purpose: Music generation
-   - Size: ~1.5GB
-   - Generates up to 30 seconds of music from text
-
-2. **Phi-2** (Microsoft)
-   - Purpose: Lyrics generation
-   - Size: ~5GB
-   - Generates creative song lyrics from prompts
-
-3. **Fish Speech** (TTS)
-   - Purpose: Vocal synthesis
-   - Size: ~2GB  
-   - Converts lyrics to singing voice
-
-### AMD GPU via DirectML
-
-- Uses `torch-directml` backend
-- Automatic device detection
-- FP32/FP16 mixed precision
-- Optimized for AMD Vega architecture
-
-### Project Structure
-
-## Troubleshooting
-
-### AMD GPU Not Detected
-
-1. Ensure `torch-directml` is installed:
-   ```powershell
-   pip install torch-directml
-   ```
-
-2. Check device in logs when app starts:
-   ```
-   ✅ AMD GPU detected via DirectML
-   ```
-
-3. If not detected, app will use CPU (slower but functional)
-
-### Models Not Downloading
-
-1. Check internet connection
-2. Verify Hugging Face is accessible
-3. Manual download option:
-   ```powershell
-   python setup_models.py
-   ```
-
-### Out of Memory Errors
-
-1. Reduce clip duration
-2. Close other applications
-3. Use CPU instead (set `USE_DIRECTML=False` in `.env`)
-
-### Slow Generation
-
-- First run is slower (model loading)
-- Vega 8: 10-30 seconds per clip is normal
-- Check Task Manager to verify GPU usage
-
-## Support
-
-For issues:
-1. Check `logs/app.log` for detailed error messages
-2. Verify all dependencies installed: `pip list`
-3. Ensure models downloaded: check `models/` folder
-4. Test AMD GPU detection: `python -c "import torch_directml; print(torch_directml.is_available())"`
+🎵 **Live Demo**: [Try LEMM on HuggingFace Spaces](https://huggingface.co/spaces/Gamahea/lemm-test-100)  
+📦 **LoRA Collection**: [Browse Trained Models](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)  
+🏢 **Organization**: [lemm-ai on GitHub](https://github.com/lemm-ai)
 
 ---
 
-Built with ❤️ using AI-powered music generation
+## ✨ Key Features
+
+### 🎵 Music Generation
+- **Text-to-Music**: Generate music from style descriptions
+- **Built-in Vocals**: DiffRhythm2 generates vocals directly with music (no separate TTS)
+- **Style Consistency**: New clips inherit musical character from existing ones
+- **Flexible Duration**: 10-120 second clips
+
+### 🎓 LoRA Training
+- **Custom Style Training**: Fine-tune on your own music datasets
+- **Public Datasets**: GTZAN, MusicCaps, FMA support
+- **Continued Training**: Use existing LoRAs as base models
+- **Automatic Upload**: Trained LoRAs uploaded to HuggingFace Hub
+
+### 🎚️ Professional Audio Tools
+- **Advanced Mastering**: 32 professional presets (Pop, Rock, Electronic, etc.)
+- **Custom EQ**: 8-band parametric equalizer
+- **Dynamics**: Compression and limiting controls
+- **Audio Enhancement**: 
+  - Stem separation (Demucs)
+  - Noise reduction
+  - Super resolution (upscale to 48kHz)
+
+### 🎛️ DAW-Style Interface
+- **Horizontal Timeline**: Professional multi-track layout
+- **Visual Waveforms**: See your music as you build
+- **Track Management**: Add, remove, rearrange clips
+- **Real-time Preview**: Play individual clips or full timeline
+
+---
+
+## 🚀 Quick Start
+
+### Option 1: HuggingFace Spaces (Recommended)
+
+Try LEMM instantly with zero setup:
+
+👉 **[Launch LEMM Space](https://huggingface.co/spaces/Gamahea/lemm-test-100)**
+
+- No installation required
+- Free GPU access
+- Pre-loaded models
+- Immediate start
+
+### Option 2: Local Installation
+
+**Prerequisites:**
+- Python 3.10 or 3.11
+- 16GB+ RAM recommended
+- NVIDIA GPU recommended (CUDA 12.x) or CPU
+
+**Installation:**
+
+```bash
+# Clone the repository
+git clone https://github.com/lemm-ai/LEMM-1.0.0-ALPHA.git
+cd LEMM-1.0.0-ALPHA
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# Windows:
+.\.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Launch LEMM
+python app.py
+```
+
+**Access at**: http://localhost:7860
+
+---
+
+## 📖 Usage Guide
+
+### 1️⃣ Generate Your First Track
+
+1. **Enter Music Prompt**: Describe the style
+   - Example: *"upbeat electronic dance music with heavy bass"*
+2. **Add Lyrics** (optional): DiffRhythm2 will sing them
+   - Leave empty for instrumental
+3. **Set Duration**: 10-120 seconds (default: 30s)
+4. **Generate**: Click "✨ Generate Music Clip"
+5. **Preview**: Listen in the audio player
+
+### 2️⃣ Build Your Composition
+
+1. **Timeline Tab**: View all generated clips
+2. **Waveform Preview**: Visual representation of each clip
+3. **Add More**: Generate additional clips at different positions
+4. **Style Consistency**: New clips automatically match existing style
+
+### 3️⃣ Master & Export
+
+1. **Mastering Tab**: 
+   - Choose preset (Pop, Rock, EDM, etc.)
+   - Or customize: EQ, compression, limiting
+2. **Enhancement** (optional):
+   - Stem separation
+   - Noise reduction
+   - Audio super resolution
+3. **Export Tab**: 
+   - Choose format (WAV, MP3, FLAC)
+   - Download your finished track
+
+### 4️⃣ Train Custom LoRAs
+
+1. **Dataset Management Tab**:
+   - Select public dataset (GTZAN, MusicCaps, FMA)
+   - Or upload your own music
+   - Download and prepare dataset
+2. **Training Configuration Tab**:
+   - Name your LoRA
+   - Set training parameters
+   - Choose base LoRA (optional - for continued training)
+   - Start training
+3. **Wait for Training**: Progress shown in real-time
+4. **Auto-Upload**: LoRA uploaded to HuggingFace as model
+5. **Reuse**: Download and use in future generations
+
+---
+
+## 🏗️ Architecture
+
+### Core Technology
+
+**DiffRhythm2** (ASLP-lab)
+- State-of-the-art music generation with vocals
+- Continuous Flow Matching (CFM) diffusion
+- MuQ-MuLan style encoding for consistency
+- Native vocal generation (no separate TTS)
+
+**LoRA Fine-Tuning** (PEFT)
+- Low-Rank Adaptation for efficient training
+- Parameter-efficient fine-tuning
+- Custom style specialization
+- Continued training support
+
+### System Components
+
+```
+LEMM/
+├── app.py                      # Main Gradio interface
+├── backend/
+│   ├── services/
+│   │   ├── diffrhythm_service.py       # DiffRhythm2 integration
+│   │   ├── lora_training_service.py    # LoRA training
+│   │   ├── dataset_service.py          # Dataset management
+│   │   ├── mastering_service.py        # Audio mastering
+│   │   ├── stem_enhancement_service.py # Audio enhancement
+│   │   ├── audio_upscale_service.py    # Super resolution
+│   │   ├── hf_storage_service.py       # HuggingFace uploads
+│   │   └── ...
+│   ├── routes/                 # API endpoints
+│   ├── models/                 # Data schemas
+│   └── config/                 # Configuration
+├── models/
+│   ├── diffrhythm2/           # Music generation model
+│   ├── loras/                 # Trained LoRA adapters
+│   └── ...
+├── training_data/             # Prepared datasets
+├── outputs/                   # Generated music
+└── requirements.txt           # Dependencies
+```
+
+### Key Dependencies
+
+- **torch**: 2.4.0+ (PyTorch)
+- **diffusers**: Diffusion models
+- **transformers**: 4.47.1 (HuggingFace)
+- **peft**: LoRA training
+- **gradio**: Web interface
+- **pedalboard**: Audio mastering
+- **demucs**: Stem separation
+- **huggingface-hub**: Model uploads
+
+---
+
+## 🎓 Training Your Own LoRAs
+
+### Supported Datasets
+
+**Public Datasets:**
+- **GTZAN**: Music genre classification (1,000 tracks, 10 genres)
+- **MusicCaps**: Google's music captioning dataset
+- **FMA (Free Music Archive)**: Large-scale music collection
+
+**Custom Datasets:**
+- Upload your own music collections
+- Supports MP3, WAV, FLAC, OGG
+
+### Training Process
+
+1. **Prepare Dataset**:
+   - Download or upload music
+   - Extract audio samples
+   - Split into train/validation sets
+
+2. **Configure Training**:
+   - **LoRA Rank**: 4-64 (higher = more expressive, slower)
+   - **Learning Rate**: 1e-4 to 1e-3
+   - **Batch Size**: 1-8 (depends on GPU memory)
+   - **Epochs**: 10-100 (depends on dataset size)
+   - **Base LoRA**: Optional - continue from existing model
+
+3. **Monitor Training**:
+   - Real-time loss graphs
+   - Validation metrics
+   - Progress percentage
+
+4. **Upload & Share**:
+   - Automatic upload to HuggingFace Hub
+   - Model ID: `Gamahea/lemm-lora-{your-name}`
+   - Add to [LEMM Collection](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)
+
+### Example: Training on GTZAN
+
+```
+1. Dataset Management → Select GTZAN → Download
+2. Prepare Dataset → GTZAN → Prepare (800 train, 200 val)
+3. Training Configuration:
+   - Name: "my_jazz_lora"
+   - Dataset: gtzan
+   - Epochs: 50
+   - LoRA Rank: 8
+   - Learning Rate: 1e-4
+4. Start Training → Wait ~2-4 hours (GPU dependent)
+5. ✅ Uploaded: Gamahea/lemm-lora-my-jazz-lora
+6. Reuse in generation or continue training
+```
+
+---
+
+## 🎨 LoRA Management
+
+### Download from HuggingFace
+
+1. Go to **LoRA Management Tab**
+2. Enter model ID: `Gamahea/lemm-lora-{name}`
+3. Click "Download from Hub"
+4. Use immediately in generation
+
+### Browse Collection
+
+👉 [LEMM LoRA Collection](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)
+
+Discover community-trained LoRAs:
+- Genre specialists (jazz, rock, electronic)
+- Style adaptations
+- Custom fine-tuned models
+
+### Export/Import
+
+**Export:**
+- Download trained LoRA as ZIP
+- Share with others
+- Backup your work
+
+**Import:**
+- Upload LoRA ZIP file
+- Instantly available for use
+- Continue training from checkpoint
+
+---
+
+## 🔧 Advanced Configuration
+
+### GPU Acceleration
+
+**NVIDIA (Recommended):**
+```bash
+# CUDA 12.x automatically detected
+# No additional configuration needed
+```
+
+**CPU Mode:**
+```bash
+# Automatic fallback if no GPU detected
+# Slower but fully functional
+```
+
+### Model Paths
+
+Models downloaded to:
+- DiffRhythm2: `models/diffrhythm2/`
+- LoRAs: `models/loras/`
+- Training data: `training_data/`
+
+### Environment Variables
+
+Create `.env` file:
+```env
+# HuggingFace token for uploads (optional)
+HF_TOKEN=hf_xxxxxxxxxxxxx
+
+# Gradio server port (default: 7860)
+GRADIO_SERVER_PORT=7860
+
+# Enable debug logging
+DEBUG=false
+```
+
+---
+
+## 📊 Technical Specifications
+
+### Generation
+
+- **Model**: DiffRhythm2 (CFM-based diffusion)
+- **Sampling**: 22050 Hz (can upscale to 48kHz)
+- **Duration**: 10-120 seconds per clip
+- **Vocals**: Built-in (no separate TTS)
+- **Style Encoding**: MuQ-MuLan
+
+### Training
+
+- **Method**: LoRA (Low-Rank Adaptation)
+- **Rank**: 4-64 (configurable)
+- **Precision**: Mixed (FP16/FP32)
+- **Optimizer**: AdamW
+- **Scheduler**: Cosine annealing
+
+### Audio Enhancement
+
+- **Stem Separation**: Demucs 4.0.1 (4-stem)
+- **Noise Reduction**: Spectral subtraction
+- **Super Resolution**: AudioSR (up to 48kHz)
+- **Mastering**: Pedalboard (Spotify LUFS-compliant)
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how:
+
+### Report Issues
+
+- [GitHub Issues](https://github.com/lemm-ai/LEMM-1.0.0-ALPHA/issues)
+- Include: steps to reproduce, logs, system info
+
+### Share LoRAs
+
+1. Train custom LoRA in LEMM
+2. Upload to HuggingFace (automatic)
+3. Add to [Collection](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)
+4. Share with community
+
+### Development
+
+```bash
+# Fork the repository
+# Clone your fork
+git clone https://github.com/YOUR-USERNAME/LEMM-1.0.0-ALPHA.git
+
+# Create feature branch
+git checkout -b feature/your-feature
+
+# Make changes and commit
+git commit -am "Add your feature"
+
+# Push and create PR
+git push origin feature/your-feature
+```
+
+---
+
+## 📄 License
+
+**MIT License** - See [LICENSE](LICENSE) file
+
+Free to use, modify, and distribute.
+
+---
+
+## 🙏 Acknowledgments
+
+### Models & Technologies
+
+- **DiffRhythm2**: ASLP-lab for state-of-the-art music generation
+- **LoRA/PEFT**: HuggingFace for parameter-efficient fine-tuning
+- **Gradio**: For the beautiful web interface
+- **Demucs**: Meta AI for stem separation
+- **Pedalboard**: Spotify for professional audio processing
+
+### Datasets
+
+- **GTZAN**: Music genre classification dataset
+- **MusicCaps**: Google's music captioning dataset
+- **FMA**: Free Music Archive community
+
+---
+
+## 📞 Support & Community
+
+- **Documentation**: [Full Docs](https://github.com/lemm-ai/LEMM-1.0.0-ALPHA/wiki)
+- **HuggingFace Space**: [Try Now](https://huggingface.co/spaces/Gamahea/lemm-test-100)
+- **LoRA Collection**: [Browse Models](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)
+- **Issues**: [GitHub Issues](https://github.com/lemm-ai/LEMM-1.0.0-ALPHA/issues)
+
+---
+
+## 🚀 What's Next
+
+**Planned Features:**
+- Multi-track composition tools
+- Real-time style transfer
+- Collaborative projects
+- Mobile app
+- VST plugin support
+
+**Join the Journey!**
+
+Built with ❤️ by the LEMM community
+
+---
+
+**LEMM - Let Everyone Make Music** 🎵
