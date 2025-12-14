@@ -113,6 +113,61 @@ class DatasetService:
                     logger.warning(f"Failed to load metadata for {dataset_key}: {e}")
         
         return downloaded
+    
+    def get_user_datasets(self) -> Dict[str, Dict]:
+        """Get information about user-uploaded/prepared datasets
+        
+        Returns:
+            Dictionary mapping user dataset names to their metadata
+        """
+        user_datasets = {}
+        
+        # Scan training_data directory for user datasets (prefixed with 'user_')
+        if not self.base_dir.exists():
+            return user_datasets
+        
+        for dataset_dir in self.base_dir.iterdir():
+            if not dataset_dir.is_dir():
+                continue
+            
+            dataset_key = dataset_dir.name
+            
+            # Skip HuggingFace datasets (they're in DATASETS dict)
+            if dataset_key in self.DATASETS:
+                continue
+            
+            # Check for dataset_info.json or metadata indicating it's a user dataset
+            metadata_path = dataset_dir / 'dataset_info.json'
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, 'r') as f:
+                        info = json.load(f)
+                    
+                    # Mark as user dataset
+                    info['is_user_dataset'] = True
+                    info['dataset_key'] = dataset_key
+                    user_datasets[dataset_key] = info
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata for user dataset {dataset_key}: {e}")
+        
+        return user_datasets
+    
+    def get_all_available_datasets(self) -> Dict[str, Dict]:
+        """Get all available datasets (both HuggingFace and user-uploaded)
+        
+        Returns:
+            Dictionary mapping all dataset keys to their metadata
+        """
+        all_datasets = {}
+        
+        # Get HuggingFace datasets
+        all_datasets.update(self.get_downloaded_datasets())
+        
+        # Get user datasets
+        all_datasets.update(self.get_user_datasets())
+        
+        return all_datasets
         
     def download_dataset(self, dataset_key: str, progress_callback=None) -> Dict:
         """

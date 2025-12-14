@@ -914,15 +914,12 @@ def get_dataset_choices_with_status():
         
         dataset_service = DatasetService()
         downloaded = dataset_service.get_downloaded_datasets()
+        user_datasets = dataset_service.get_user_datasets()
         
         # Dataset display mappings
         dataset_display_map = {
             "gtzan": "GTZAN Music Genre (1000 tracks, 10 genres)",
             "fsd50k": "FSD50K Sound Events (51K clips, 200 classes)",
-            "common_voice": "Common Voice English (crowdsourced speech)",
-            "jamendo": "MTG-Jamendo (55k tracks, music tagging)",
-            "musiccaps": "MusicCaps (5.5k clips with descriptions)",
-            "fleurs": "FLEURS English Speech (multi-speaker)",
             "librispeech": "LibriSpeech ASR (speech recognition)",
             "libritts": "LibriTTS (audiobooks for TTS)",
             "audioset_strong": "AudioSet Strong (labeled audio events)",
@@ -937,6 +934,7 @@ def get_dataset_choices_with_status():
         music_keys = ["gtzan"]
         vocal_keys = ["librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k", "fsd50k"]
         
+        # Add HuggingFace datasets
         for key in music_keys:
             display_name = dataset_display_map.get(key, key)
             if key in downloaded:
@@ -960,6 +958,17 @@ def get_dataset_choices_with_status():
                     vocal_choices.append(f"📥 {display_name} [Downloaded]")
             else:
                 vocal_choices.append(display_name)
+        
+        # Add user-uploaded datasets
+        for key, info in user_datasets.items():
+            dataset_name = info.get('dataset_name', key)
+            num_samples = info.get('num_train_samples', 0) + info.get('num_val_samples', 0)
+            display_name = f"👤 {dataset_name} ({num_samples} samples)"
+            
+            if info.get('prepared'):
+                vocal_choices.append(f"✅ {display_name} [User Dataset - Prepared]")
+            else:
+                vocal_choices.append(f"📥 {display_name} [User Dataset]")
         
         return music_choices, vocal_choices, prepare_choices
         
@@ -1191,10 +1200,20 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
             return "❌ No audio files uploaded"
         
         from backend.services.audio_analysis_service import AudioAnalysisService
-        from backend.services.lora_training_service import LoRATrainingService
+        from backend.services.dataset_service import DatasetService
+        from pathlib import Path
+        import shutil
+        import json
         
         analyzer = AudioAnalysisService()
-        lora_service = LoRATrainingService()
+        dataset_service = DatasetService()
+        
+        # Create persistent user dataset directory
+        timestamp = int(time.time())
+        dataset_name = f"user_dataset_{timestamp}"
+        dataset_dir = Path("training_data") / dataset_name
+        audio_dir = dataset_dir / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
         
         # Process audio files
         processed_files = []
@@ -1215,39 +1234,42 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
                 # Analyze if no metadata
                 file_metadata = analyzer.analyze_audio(audio_file.name)
             
-            # Split into clips if requested
-            if split_clips:
-                clip_paths = analyzer.split_audio_to_clips(
-                    audio_file.name,
-                    "training_data/user_uploads/clips",
-                    metadata=file_metadata
-                )
-                processed_files.extend(clip_paths)
-                processed_metadata.extend([file_metadata] * len(clip_paths))
-            else:
-                processed_files.append(audio_file.name)
-                processed_metadata.append(file_metadata)
+            # Copy file to persistent storage
+            dest_filename = f"sample_{i:06d}.wav"
+            dest_path = audio_dir / dest_filename
+            shutil.copy2(audio_file.name, dest_path)
             
-            # Separate stems if requested
-            if separate_stems:
-                stem_paths = analyzer.separate_vocal_stems(
-                    audio_file.name,
-                    "training_data/user_uploads/stems"
-                )
-                # Use vocals only for vocal training
-                if 'vocals' in stem_paths:
-                    processed_files.append(stem_paths['vocals'])
-                    processed_metadata.append({**file_metadata, 'type': 'vocal'})
+            processed_files.append(str(dest_path))
+            processed_metadata.append(file_metadata)
         
-        # Prepare dataset
-        dataset_name = f"user_dataset_{int(time.time())}"
-        dataset_info = lora_service.prepare_dataset(
-            dataset_name,
-            processed_files,
-            processed_metadata
-        )
+        # Split into train/val
+        num_train = int(len(processed_files) * 0.9)
+        train_files = processed_files[:num_train]
+        val_files = processed_files[num_train:]
+        train_metadata = processed_metadata[:num_train]
+        val_metadata = processed_metadata[num_train:]
         
-        return f"✅ Prepared dataset '{dataset_name}' with {dataset_info['num_samples']} samples ({dataset_info['num_train']} train, {dataset_info['num_val']} val)"
+        # Save dataset metadata
+        dataset_info = {
+            'dataset_name': dataset_name,
+            'dataset_key': dataset_name,
+            'is_user_dataset': True,
+            'created_date': datetime.now().isoformat(),
+            'prepared': True,
+            'num_train_samples': len(train_files),
+            'num_val_samples': len(val_files),
+            'train_files': train_files,
+            'val_files': val_files,
+            'train_metadata': train_metadata,
+            'val_metadata': val_metadata,
+            'train_val_split': 0.9
+        }
+        
+        metadata_path = dataset_dir / 'dataset_info.json'
+        with open(metadata_path, 'w') as f:
+            json.dump(dataset_info, f, indent=2)
+        
+        return f"✅ Prepared user dataset '{dataset_name}' with {len(processed_files)} samples ({len(train_files)} train, {len(val_files)} val)\n📁 Saved to: {dataset_dir}"
         
     except Exception as e:
         logger.error(f"Dataset preparation failed: {e}")
