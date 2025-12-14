@@ -14,6 +14,18 @@ import torch
 import torchaudio
 import json
 
+# Import spaces for ZeroGPU support
+try:
+    import spaces
+    HAS_SPACES = True
+except ImportError:
+    HAS_SPACES = False
+    # Create a dummy decorator for local development
+    class spaces:
+        @staticmethod
+        def GPU(func):
+            return func
+
 # Configure espeak-ng path for phonemizer (required by g2p module)
 # Note: Environment configuration handled by hf_config.py for HuggingFace Spaces
 # or by launch scripts for local development
@@ -103,7 +115,7 @@ class DiffRhythmService:
             
             model_config['use_flex_attn'] = False
             
-            # Create model
+            # Create model (keep on CPU initially for ZeroGPU compatibility)
             self.model = CFM(
                 transformer=DiT(**model_config),
                 num_channels=model_config['mel_dim'],
@@ -113,13 +125,14 @@ class DiffRhythmService:
             # Load weights
             ckpt = load_file(model_ckpt)
             self.model.load_state_dict(ckpt)
-            self.model = self.model.to(self.device)
+            # Note: Model will be moved to device inside GPU-decorated function
             
-            # Load MuLan for style encoding
+            # Load MuLan for style encoding (keep on CPU initially)
             self.mulan = MuQMuLan.from_pretrained(
                 "OpenMuQ/MuQ-MuLan-large",
                 cache_dir=os.path.join(self.model_path, "mulan")
-            ).to(self.device)
+            )
+            # Note: MuLan will be moved to device inside GPU-decorated function
             
             # Load tokenizer
             from g2p.g2p_generation import chn_eng_g2p
@@ -147,7 +160,7 @@ class DiffRhythmService:
                 'g2p': chn_eng_g2p
             }
             
-            # Load decoder (BigVGAN vocoder)
+            # Load decoder (BigVGAN vocoder) - keep on CPU initially
             decoder_ckpt = hf_hub_download(
                 repo_id=repo_id,
                 filename="decoder.bin",
@@ -161,8 +174,9 @@ class DiffRhythmService:
                 local_files_only=False,
             )
             
+            # Load decoder (keep on CPU initially)
             self.decoder = Generator(decoder_config, decoder_ckpt)
-            self.decoder = self.decoder.to(self.device)
+            # Note: Decoder will be moved to device inside GPU-decorated function
             
             logger.info("✅ DiffRhythm 2 model loaded successfully")
             
@@ -239,6 +253,7 @@ class DiffRhythmService:
             logger.error(f"Music generation failed: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to generate music: {str(e)}")
     
+    @spaces.GPU(duration=60)
     def _generate_with_diffrhythm2(
         self, 
         prompt: str, 
@@ -262,6 +277,13 @@ class DiffRhythmService:
         """
         try:
             logger.info("Generating with DiffRhythm 2 model...")
+            
+            # Move models to GPU (for ZeroGPU compatibility)
+            # This ensures models are on GPU only within the decorated function
+            if self.device.type != 'cpu':
+                self.model = self.model.to(self.device)
+                self.mulan = self.mulan.to(self.device)
+                self.decoder = self.decoder.to(self.device)
             
             # Prepare lyrics tokens
             if lyrics:
