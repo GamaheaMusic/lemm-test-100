@@ -2197,17 +2197,20 @@ with gr.Blocks(
                     interactive=False
                 )
                 
-                refresh_lora_btn = gr.Button("🔄 Refresh List", size="sm")
-                
-                gr.Markdown("### Actions")
                 with gr.Row():
-                    selected_lora_for_action = gr.Dropdown(
-                        choices=[],
-                        label="Select LoRA Adapter",
-                        scale=3
-                    )
-                    download_lora_btn = gr.Button("⬇️ Download", variant="primary", size="sm")
-                    delete_lora_btn = gr.Button("🗑️ Delete", variant="stop", size="sm")
+                    refresh_lora_btn = gr.Button("🔄 Refresh List", size="sm")
+                
+                gr.Markdown("### Actions on Selected LoRA")
+                
+                selected_lora_for_action = gr.Dropdown(
+                    choices=[],
+                    label="Select LoRA Adapter",
+                    info="Choose a LoRA to download or delete"
+                )
+                
+                with gr.Row():
+                    download_lora_btn = gr.Button("⬇️ Download LoRA", variant="primary", size="lg", scale=1)
+                    delete_lora_btn = gr.Button("🗑️ Delete LoRA", variant="stop", size="lg", scale=1)
                 
                 lora_download_file = gr.File(label="Downloaded LoRA", interactive=False)
                 lora_action_status = gr.Textbox(label="Action Status", lines=1, interactive=False)
