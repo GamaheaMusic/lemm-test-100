@@ -371,10 +371,10 @@ class DatasetService:
             if progress_callback:
                 progress_callback(f"📂 Loading dataset from cache...")
             
-            from datasets import load_dataset
+            from datasets import load_dataset, Audio
             import librosa
             hf_id = config['hf_id']
-            # Disable automatic audio decoding to avoid torchcodec dependency
+            # Load dataset WITHOUT automatic audio decoding to avoid torchcodec dependency
             load_params = {
                 'path': hf_id, 
                 'cache_dir': str(cache_dir),
@@ -394,14 +394,7 @@ class DatasetService:
             else:
                 data = dataset
             
-            total_samples = len(data)
-            if max_samples:
-                total_samples = min(total_samples, max_samples)
-            
-            if progress_callback:
-                progress_callback(f"📊 Processing {total_samples} samples...")
-            
-            # Determine audio column name (varies by dataset)
+            # Determine audio column and cast to disable automatic decoding
             audio_column = None
             for col in ['audio', 'file', 'path', 'wav']:
                 if col in data.column_names:
@@ -410,6 +403,21 @@ class DatasetService:
             
             if not audio_column:
                 raise ValueError(f"Could not find audio column in dataset. Available columns: {data.column_names}")
+            
+            # Cast audio column to disable automatic decoding - we'll decode manually with librosa
+            if audio_column in data.column_names:
+                try:
+                    # Remove the Audio feature to prevent automatic decoding
+                    data = data.cast_column(audio_column, feature=None)
+                except:
+                    pass  # If casting fails, proceed anyway
+            
+            total_samples = len(data)
+            if max_samples:
+                total_samples = min(total_samples, max_samples)
+            
+            if progress_callback:
+                progress_callback(f"📊 Processing {total_samples} samples...")
             
             # Process samples
             train_files = []
@@ -556,8 +564,8 @@ class DatasetService:
         """List all available datasets and their configurations"""
         return self.DATASETS
     
-    def get_downloaded_datasets(self) -> List[str]:
-        """Get list of already downloaded datasets"""
+    def get_downloaded_dataset_keys(self) -> List[str]:
+        """Get list of already downloaded dataset keys (simple list)"""
         downloaded = []
         for dataset_key in self.DATASETS.keys():
             dataset_dir = self.base_dir / dataset_key
