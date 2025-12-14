@@ -23,6 +23,13 @@ class DatasetService:
             'description': 'Music genre classification dataset (GTZAN-based)',
             'size_gb': 1.2
         },
+        'msd': {
+            'name': 'Million Song Dataset (10K subset)',
+            'type': 'music',
+            'hf_id': 'sander-wood/irishman',
+            'description': 'Million Song Dataset 10K subset for music analysis',
+            'size_gb': 1.5
+        },
         'jamendo': {
             'name': 'MTG-Jamendo Dataset',
             'type': 'music',
