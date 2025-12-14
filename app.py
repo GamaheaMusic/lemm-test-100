@@ -438,6 +438,8 @@ def export_timeline(filename: str, export_format: str, timeline_state: dict, pro
 def get_timeline_playback(timeline_state: dict):
     """Get merged timeline audio for playback"""
     try:
+        logger.info(f"[PLAYBACK] get_timeline_playback called with state: {timeline_state is not None}")
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -445,11 +447,15 @@ def get_timeline_playback(timeline_state: dict):
                 from models.schemas import TimelineClip
                 clip = TimelineClip(**clip_data)
                 timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for playback")
+            logger.info(f"[PLAYBACK] Restored {len(timeline_service.clips)} clips from state")
+        else:
+            logger.warning(f"[PLAYBACK] No valid timeline_state provided: {timeline_state}")
         
         clips = timeline_service.get_all_clips()
+        logger.info(f"[PLAYBACK] Total clips in timeline: {len(clips)}")
         
         if not clips:
+            logger.warning("[PLAYBACK] No clips available for playback")
             return None
         
         # Use export service to merge clips
@@ -459,7 +465,7 @@ def get_timeline_playback(timeline_state: dict):
             export_format="wav"
         )
         
-        logger.info(f"Timeline playback ready: {output_path}")
+        logger.info(f"[PLAYBACK] Timeline playback ready: {output_path}")
         return output_path
         
     except Exception as e:
@@ -1732,6 +1738,10 @@ with gr.Blocks(
         fn=generate_music,
         inputs=[prompt_input, lyrics_input, lyrics_mode, position_input, context_length_input, timeline_state],
         outputs=[gen_status, timeline_display, audio_output, timeline_state]
+    ).then(
+        fn=get_timeline_playback,
+        inputs=[timeline_state],
+        outputs=[timeline_playback]
     )
     
     remove_btn.click(
