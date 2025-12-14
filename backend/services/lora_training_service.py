@@ -303,19 +303,23 @@ class LoRATrainingService:
             )
             
             # Create data loaders
+            # Only use pin_memory if CUDA is actually available
+            use_pin_memory = torch.cuda.is_available()
+            
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=self.training_config['batch_size'],
                 shuffle=True,
                 num_workers=2,
-                pin_memory=True
+                pin_memory=use_pin_memory
             )
             
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=self.training_config['batch_size'],
                 shuffle=False,
-                num_workers=2
+                num_workers=2,
+                pin_memory=use_pin_memory
             )
             
             # Initialize model (placeholder - actual implementation would load DiffRhythm2)
