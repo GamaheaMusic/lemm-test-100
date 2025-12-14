@@ -52,8 +52,6 @@ audiosr>=0.0.7  # Audio super resolution (upscaling to 48kHz)
 # LoRA Training dependencies
 peft>=0.6.0  # Parameter-Efficient Fine-Tuning (LoRA adapters)
 datasets>=2.14.0  # HuggingFace datasets for training data management
-torchcodec>=0.1.0  # Audio decoding for datasets library
-av>=10.0.0  # PyAV for audio/video decoding
 tensorboard>=2.13.0  # Training monitoring and visualization
 wandb>=0.15.0  # Optional: Advanced experiment tracking
 
