@@ -1276,17 +1276,47 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
         return f"❌ Error: {str(e)}"
 
 def refresh_dataset_list():
-    """Refresh list of available datasets"""
+    """Refresh list of available datasets for training"""
+    try:
+        from backend.services.dataset_service import DatasetService
+        
+        dataset_service = DatasetService()
+        all_datasets = dataset_service.get_all_available_datasets()
+        
+        # Filter to only prepared datasets
+        prepared_datasets = []
+        for key, info in all_datasets.items():
+            if info.get('prepared'):
+                # Format: dataset_key (num_train + num_val samples)
+                num_samples = info.get('num_train_samples', 0) + info.get('num_val_samples', 0)
+                display_name = f"{key} ({num_samples} samples)"
+                prepared_datasets.append(display_name)
+        
+        if not prepared_datasets:
+            prepared_datasets = ["No prepared datasets available"]
+        
+        return gr.Dropdown(choices=prepared_datasets, value=prepared_datasets[0] if prepared_datasets else None)
+        
+    except Exception as e:
+        logger.error(f"Failed to refresh datasets: {e}")
+        return gr.Dropdown(choices=["Error loading datasets"])
+
+def refresh_lora_list():
+    """Refresh list of available LoRA adapters"""
     try:
         from backend.services.lora_training_service import LoRATrainingService
         lora_service = LoRATrainingService()
         
-        datasets = lora_service.list_datasets()
-        return gr.Dropdown(choices=datasets)
+        loras = lora_service.list_loras()
+        
+        if not loras:
+            return gr.Dropdown(choices=["No LoRA adapters found"], value=None)
+        
+        return gr.Dropdown(choices=loras, value=loras[0] if loras else None)
         
     except Exception as e:
-        logger.error(f"Failed to refresh datasets: {e}")
-        return gr.Dropdown(choices=[])
+        logger.error(f"Failed to refresh LoRAs: {e}")
+        return gr.Dropdown(choices=["Error loading LoRAs"], value=None)
 
 def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha):
     """Start LoRA training"""
@@ -1294,11 +1324,14 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
         if not lora_name:
             return "❌ Please enter LoRA adapter name", ""
         
-        if not dataset:
-            return "❌ Please select a dataset", ""
+        if not dataset or dataset == "No prepared datasets available" or dataset == "Error loading datasets":
+            return "❌ Please select a valid dataset", ""
         
         from backend.services.lora_training_service import LoRATrainingService
         lora_service = LoRATrainingService()
+        
+        # Extract dataset key from display name (format: "dataset_key (N samples)")
+        dataset_key = dataset.split(" (")[0].strip()
         
         # Training config
         config = {
@@ -1318,13 +1351,13 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
             return "\n".join(progress_log[-20:])  # Last 20 lines
         
         # Start training
-        progress = f"🚀 Starting training: {lora_name}\nDataset: {dataset}\nConfig: {config}\n\n"
+        progress = f"🚀 Starting training: {lora_name}\nDataset: {dataset_key}\nConfig: {config}\n\n"
         log = "Training started...\n"
         
         # Note: In production, this should run in a background thread
         # For now, this is a simplified synchronous version
         results = lora_service.train_lora(
-            dataset,
+            dataset_key,
             lora_name,
             training_type="vocal",
             config=config,
@@ -1337,7 +1370,7 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
         return progress, log
         
     except Exception as e:
-        logger.error(f"Training failed: {e}")
+        logger.error(f"Training failed: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", str(e)
 
 def stop_lora_training():
@@ -2107,6 +2140,14 @@ with gr.Blocks(
         fn=prepare_user_training_dataset,
         inputs=[user_audio_upload, metadata_table, split_to_clips, separate_stems],
         outputs=[user_prepare_status]
+    ).then(
+        fn=refresh_dataset_status,
+        inputs=[],
+        outputs=[vocal_datasets, symbolic_datasets, prepare_datasets_selector]
+    ).then(
+        fn=refresh_dataset_list,
+        inputs=[],
+        outputs=[selected_dataset]
     )
     
     refresh_datasets_btn.click(

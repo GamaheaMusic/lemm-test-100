@@ -229,6 +229,27 @@ class LoRATrainingService:
             logger.error(f"Failed to list datasets: {str(e)}")
             return []
     
+    def list_loras(self) -> List[str]:
+        """List available LoRA adapters"""
+        try:
+            loras = []
+            if not self.lora_dir.exists():
+                return loras
+            
+            for lora_path in self.lora_dir.iterdir():
+                if lora_path.is_dir():
+                    # Check for adapter files
+                    if (lora_path / "adapter_config.json").exists():
+                        loras.append(lora_path.name)
+                    # Also check for .safetensors or .bin files
+                    elif list(lora_path.glob("*.safetensors")) or list(lora_path.glob("*.bin")):
+                        loras.append(lora_path.name)
+            
+            return sorted(loras)
+        except Exception as e:
+            logger.error(f"Failed to list LoRAs: {str(e)}")
+            return []
+    
     def train_lora(
         self,
         dataset_name: str,
@@ -275,6 +296,21 @@ class LoRATrainingService:
                 raise ValueError(
                     f"Dataset '{dataset_name}' is missing required training files. "
                     f"Please use prepared datasets or upload your own audio in the 'User Audio Training' tab."
+                )
+            
+            # Validate datasets are not empty
+            if not dataset_info['train_files'] or len(dataset_info['train_files']) == 0:
+                raise ValueError(
+                    f"Dataset '{dataset_name}' has no training samples. "
+                    f"The dataset may not have been prepared correctly. "
+                    f"Please re-prepare the dataset or use a different one."
+                )
+            
+            if not dataset_info['val_files'] or len(dataset_info['val_files']) == 0:
+                raise ValueError(
+                    f"Dataset '{dataset_name}' has no validation samples. "
+                    f"The dataset may not have been prepared correctly. "
+                    f"Please re-prepare the dataset or use a different one."
                 )
             
             # Default config
