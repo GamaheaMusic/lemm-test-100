@@ -23,12 +23,21 @@ class DatasetService:
             'description': 'Music genre classification dataset (GTZAN-based)',
             'size_gb': 1.2
         },
-        'msd': {
-            'name': 'Million Song Dataset (10K subset)',
-            'type': 'music',
-            'hf_id': 'sander-wood/irishman',
-            'description': 'Million Song Dataset 10K subset for music analysis',
-            'size_gb': 1.5
+        'fsd50k': {
+            'name': 'FSD50K Sound Events',
+            'type': 'sound_effects',
+            'hf_id': 'Yonaro/FSD50K',
+            'description': 'Freesound Dataset with 51K audio clips and 200 sound classes',
+            'size_gb': 30.0
+        },
+        'common_voice': {
+            'name': 'Common Voice English',
+            'type': 'vocal',
+            'hf_id': 'mozilla-foundation/common_voice_13_0',
+            'config': 'en',
+            'split': 'train',
+            'description': 'Mozilla Common Voice - crowdsourced speech dataset',
+            'size_gb': 45.0
         },
         'jamendo': {
             'name': 'MTG-Jamendo Dataset',

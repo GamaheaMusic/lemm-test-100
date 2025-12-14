@@ -918,7 +918,8 @@ def get_dataset_choices_with_status():
         # Dataset display mappings
         dataset_display_map = {
             "gtzan": "GTZAN Music Genre (1000 tracks, 10 genres)",
-            "msd": "Million Song Dataset (10K subset)",
+            "fsd50k": "FSD50K Sound Events (51K clips, 200 classes)",
+            "common_voice": "Common Voice English (crowdsourced speech)",
             "jamendo": "MTG-Jamendo (55k tracks, music tagging)",
             "musiccaps": "MusicCaps (5.5k clips with descriptions)",
             "fleurs": "FLEURS English Speech (multi-speaker)",
@@ -933,8 +934,8 @@ def get_dataset_choices_with_status():
         vocal_choices = []
         prepare_choices = []
         
-        music_keys = ["gtzan", "msd", "jamendo", "musiccaps"]
-        vocal_keys = ["fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]
+        music_keys = ["gtzan", "jamendo", "musiccaps"]
+        vocal_keys = ["common_voice", "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k", "fsd50k"]
         
         for key in music_keys:
             display_name = dataset_display_map.get(key, key)
@@ -987,9 +988,11 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
         dataset_map = {
             # Music datasets
             "GTZAN Music Genre (1000 tracks, 10 genres)": "gtzan",
-            "Million Song Dataset (10K subset)": "msd",
             "MTG-Jamendo (55k tracks, music tagging)": "jamendo",
             "MusicCaps (5.5k clips with descriptions)": "musiccaps",
+            # Vocal & Sound datasets
+            "FSD50K Sound Events (51K clips, 200 classes)": "fsd50k",
+            "Common Voice English (crowdsourced speech)": "common_voice",
             # Vocal & Sound datasets
             "FLEURS English Speech (multi-speaker)": "fleurs",
             "LibriSpeech ASR (speech recognition)": "librispeech",
@@ -1010,7 +1013,7 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
                 dataset_keys.append(dataset_map[clean_item])
             else:
                 # Direct key match
-                if clean_item in ["gtzan", "msd", "jamendo", "musiccaps",
+                if clean_item in ["gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
                                    "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]:
                     dataset_keys.append(clean_item)
         
@@ -1168,11 +1171,12 @@ def refresh_dataset_status():
     return (
         gr.update(choices=music_choices if music_choices else [
             "GTZAN Music Genre (1000 tracks, 10 genres)",
-            "Million Song Dataset (10K subset)",
             "MTG-Jamendo (55k tracks, music tagging)",
             "MusicCaps (5.5k clips with descriptions)"
         ]),
         gr.update(choices=vocal_choices if vocal_choices else [
+            "FSD50K Sound Events (51K clips, 200 classes)",
+            "Common Voice English (crowdsourced speech)",
             "FLEURS English Speech (multi-speaker)",
             "LibriSpeech ASR (speech recognition)",
             "LibriTTS (audiobooks for TTS)",
@@ -1181,7 +1185,7 @@ def refresh_dataset_status():
             "UrbanSound8K (urban sounds)"
         ]),
         gr.update(choices=prepare_choices if prepare_choices else [
-            "gtzan", "msd", "jamendo", "musiccaps",
+            "gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
             "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"
         ])
     )
@@ -1787,7 +1791,6 @@ with gr.Blocks(
                         vocal_datasets = gr.CheckboxGroup(
                             choices=[
                                 "GTZAN Music Genre (1000 tracks, 10 genres)",
-                                "Million Song Dataset (10K subset)",
                                 "MTG-Jamendo (55k tracks, music tagging)",
                                 "MusicCaps (5.5k clips with descriptions)"
                             ],
@@ -1799,11 +1802,15 @@ with gr.Blocks(
                         gr.Markdown("**Vocal & Sound Datasets**")
                         symbolic_datasets = gr.CheckboxGroup(
                             choices=[
+                                "FSD50K Sound Events (51K clips, 200 classes)",
+                                "Common Voice English (crowdsourced speech)",
                                 "FLEURS English Speech (multi-speaker)",
                                 "LibriSpeech ASR (speech recognition)",
                                 "LibriTTS (audiobooks for TTS)",
                                 "AudioSet Strong (labeled audio events)",
                                 "ESC-50 Environmental Sounds",
+                                "UrbanSound8K (urban sounds)"
+                            ],
                                 "UrbanSound8K (urban sounds)"
                             ],
                             label="Select Vocal/Sound Datasets",
@@ -1827,7 +1834,7 @@ with gr.Blocks(
                 gr.Markdown("After downloading, prepare datasets by extracting audio files and creating train/val splits.")
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
-                    choices=["gtzan", "msd", "jamendo", "musiccaps",
+                    choices=["gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
                              "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
