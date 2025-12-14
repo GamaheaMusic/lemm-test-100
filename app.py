@@ -935,7 +935,7 @@ def get_dataset_choices_with_status():
         prepare_choices = []
         
         music_keys = ["gtzan", "jamendo", "musiccaps"]
-        vocal_keys = ["common_voice", "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k", "fsd50k"]
+        vocal_keys = ["librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k", "fsd50k"]
         
         for key in music_keys:
             display_name = dataset_display_map.get(key, key)
@@ -1013,8 +1013,8 @@ def download_prepare_datasets(vocal_datasets, symbolic_datasets):
                 dataset_keys.append(dataset_map[clean_item])
             else:
                 # Direct key match
-                if clean_item in ["gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
-                                   "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]:
+                if clean_item in ["gtzan", "jamendo", "musiccaps", "fsd50k",
+                                   "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"]:
                     dataset_keys.append(clean_item)
         
         if not dataset_keys:
@@ -1176,8 +1176,6 @@ def refresh_dataset_status():
         ]),
         gr.update(choices=vocal_choices if vocal_choices else [
             "FSD50K Sound Events (51K clips, 200 classes)",
-            "Common Voice English (crowdsourced speech)",
-            "FLEURS English Speech (multi-speaker)",
             "LibriSpeech ASR (speech recognition)",
             "LibriTTS (audiobooks for TTS)",
             "AudioSet Strong (labeled audio events)",
@@ -1185,8 +1183,8 @@ def refresh_dataset_status():
             "UrbanSound8K (urban sounds)"
         ]),
         gr.update(choices=prepare_choices if prepare_choices else [
-            "gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
-            "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"
+            "gtzan", "jamendo", "musiccaps", "fsd50k",
+            "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"
         ])
     )
 
@@ -1803,8 +1801,6 @@ with gr.Blocks(
                         symbolic_datasets = gr.CheckboxGroup(
                             choices=[
                                 "FSD50K Sound Events (51K clips, 200 classes)",
-                                "Common Voice English (crowdsourced speech)",
-                                "FLEURS English Speech (multi-speaker)",
                                 "LibriSpeech ASR (speech recognition)",
                                 "LibriTTS (audiobooks for TTS)",
                                 "AudioSet Strong (labeled audio events)",
@@ -1832,8 +1828,8 @@ with gr.Blocks(
                 gr.Markdown("After downloading, prepare datasets by extracting audio files and creating train/val splits.")
                 
                 prepare_datasets_selector = gr.CheckboxGroup(
-                    choices=["gtzan", "jamendo", "musiccaps", "fsd50k", "common_voice",
-                             "fleurs", "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
+                    choices=["gtzan", "jamendo", "musiccaps", "fsd50k",
+                             "librispeech", "libritts", "audioset_strong", "esc50", "urbansound8k"],
                     label="Select Downloaded Datasets to Prepare",
                     info="Only select datasets you've already downloaded above"
                 )

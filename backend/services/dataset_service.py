@@ -26,18 +26,9 @@ class DatasetService:
         'fsd50k': {
             'name': 'FSD50K Sound Events',
             'type': 'sound_effects',
-            'hf_id': 'Yonaro/FSD50K',
+            'hf_id': 'nguyenvulebinh/fsd50k',
             'description': 'Freesound Dataset with 51K audio clips and 200 sound classes',
             'size_gb': 30.0
-        },
-        'common_voice': {
-            'name': 'Common Voice English',
-            'type': 'vocal',
-            'hf_id': 'mozilla-foundation/common_voice_13_0',
-            'config': 'en',
-            'split': 'train',
-            'description': 'Mozilla Common Voice - crowdsourced speech dataset',
-            'size_gb': 45.0
         },
         'jamendo': {
             'name': 'MTG-Jamendo Dataset',
@@ -46,18 +37,10 @@ class DatasetService:
             'description': 'Music tagging dataset with 55k tracks',
             'size_gb': 25.0
         },
-        'fleurs': {
-            'name': 'FLEURS Speech Dataset',
-            'type': 'vocal',
-            'hf_id': 'google/fleurs',
-            'config': 'en_us',
-            'description': 'Multilingual speech dataset - English subset',
-            'size_gb': 3.5
-        },
         'librispeech': {
             'name': 'LibriSpeech ASR',
             'type': 'vocal',
-            'hf_id': 'librispeech_asr',
+            'hf_id': 'openslr/librispeech_asr',
             'description': 'LibriSpeech corpus for speech recognition',
             'size_gb': 60.0
         },
