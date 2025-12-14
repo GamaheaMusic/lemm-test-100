@@ -1308,23 +1308,6 @@ def refresh_dataset_list():
         logger.error(f"Failed to refresh datasets: {e}")
         return gr.Dropdown(choices=["Error loading datasets"])
 
-def refresh_lora_list():
-    """Refresh list of available LoRA adapters"""
-    try:
-        from backend.services.lora_training_service import LoRATrainingService
-        lora_service = LoRATrainingService()
-        
-        loras = lora_service.list_loras()
-        
-        if not loras:
-            return gr.Dropdown(choices=["No LoRA adapters found"], value=None)
-        
-        return gr.Dropdown(choices=loras, value=loras[0] if loras else None)
-        
-    except Exception as e:
-        logger.error(f"Failed to refresh LoRAs: {e}")
-        return gr.Dropdown(choices=["Error loading LoRAs"], value=None)
-
 def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha):
     """Start LoRA training"""
     try:
@@ -1414,11 +1397,12 @@ def refresh_lora_list():
             ])
             lora_names.append(adapter.get('name', ''))
         
-        return table_data, gr.Dropdown(choices=lora_names)
+        # Return table data and update both dropdowns (action dropdown and base_lora dropdown)
+        return table_data, gr.Dropdown(choices=lora_names), gr.Dropdown(choices=lora_names)
         
     except Exception as e:
         logger.error(f"Failed to refresh LoRA list: {e}")
-        return [], gr.Dropdown(choices=[])
+        return [], gr.Dropdown(choices=[]), gr.Dropdown(choices=[])
 
 def delete_lora(lora_name):
     """Delete selected LoRA adapter"""
@@ -1479,6 +1463,10 @@ def upload_lora(zip_file):
     except Exception as e:
         logger.error(f"Failed to import LoRA: {e}")
         return f"❌ Error: {str(e)}"
+
+def toggle_base_lora(use_existing):
+    """Toggle visibility of base LoRA adapter dropdown"""
+    return gr.Dropdown(visible=use_existing)
 
 def export_dataset(dataset_key):
     """Export prepared dataset as zip file"""
@@ -2100,6 +2088,21 @@ with gr.Blocks(
                 
                 refresh_datasets_btn = gr.Button("🔄 Refresh Datasets", size="sm")
                 
+                gr.Markdown("#### Fine-tune Existing LoRA (Optional)")
+                
+                use_existing_lora = gr.Checkbox(
+                    label="Continue training from existing LoRA",
+                    value=False,
+                    info="Start from a pre-trained LoRA adapter instead of from scratch"
+                )
+                
+                base_lora_adapter = gr.Dropdown(
+                    choices=[],
+                    label="Base LoRA Adapter",
+                    info="Select LoRA to continue training from",
+                    visible=False
+                )
+                
                 gr.Markdown("#### Hyperparameters")
                 
                 with gr.Row():
@@ -2169,30 +2172,44 @@ with gr.Blocks(
             
             # Tab 4: Manage LoRA Adapters
             with gr.Tab("📂 Manage LoRA Adapters"):
+                gr.Markdown("### Upload New LoRA Adapter")
+                
+                with gr.Row():
+                    upload_lora_file = gr.File(
+                        label="📤 Upload LoRA (.zip)",
+                        file_types=[".zip"],
+                        type="filepath",
+                        scale=3
+                    )
+                    upload_lora_btn = gr.Button("Upload", variant="primary", size="sm")
+                
+                upload_lora_status = gr.Textbox(label="Upload Status", lines=1, interactive=False)
+                
+                gr.Markdown("---")
                 gr.Markdown("### Installed LoRA Adapters")
                 
                 lora_list = gr.Dataframe(
                     headers=["Name", "Created", "Training Steps", "Type"],
                     datatype=["str", "str", "number", "str"],
                     row_count=10,
-                    label="Available LoRA Adapters"
+                    label="Available LoRA Adapters",
+                    interactive=False
                 )
                 
+                refresh_lora_btn = gr.Button("🔄 Refresh List", size="sm")
+                
+                gr.Markdown("### Actions")
                 with gr.Row():
-                    refresh_lora_btn = gr.Button("🔄 Refresh List", size="sm")
-                    selected_lora = gr.Dropdown(
+                    selected_lora_for_action = gr.Dropdown(
                         choices=[],
-                        label="Select LoRA",
-                        scale=2
+                        label="Select LoRA Adapter",
+                        scale=3
                     )
+                    download_lora_btn = gr.Button("⬇️ Download", variant="primary", size="sm")
+                    delete_lora_btn = gr.Button("🗑️ Delete", variant="stop", size="sm")
                 
-                with gr.Row():
-                    download_lora_btn = gr.Button("⬇️ Download LoRA", variant="primary", size="sm")
-                    upload_lora_file = gr.File(label="Upload LoRA (.zip)", file_types=[".zip"], type="filepath")
-                    delete_lora_btn = gr.Button("🗑️ Delete LoRA", variant="stop", size="sm")
-                
-                lora_download_file = gr.File(label="Downloaded LoRA", visible=True, interactive=False)
-                lora_management_status = gr.Textbox(label="Status", lines=2, interactive=False)
+                lora_download_file = gr.File(label="Downloaded LoRA", visible=False, interactive=False)
+                lora_action_status = gr.Textbox(label="Action Status", lines=1, interactive=False)
                 
                 gr.Markdown("---")
                 gr.Markdown(
@@ -2309,33 +2326,39 @@ with gr.Blocks(
     refresh_lora_btn.click(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
     )
     
     delete_lora_btn.click(
         fn=delete_lora,
-        inputs=[selected_lora],
-        outputs=[lora_management_status]
+        inputs=[selected_lora_for_action],
+        outputs=[lora_action_status]
     ).then(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
     )
     
     download_lora_btn.click(
         fn=download_lora,
-        inputs=[selected_lora],
-        outputs=[lora_download_file, lora_management_status]
+        inputs=[selected_lora_for_action],
+        outputs=[lora_download_file, lora_action_status]
     )
     
-    upload_lora_file.change(
+    upload_lora_btn.click(
         fn=upload_lora,
         inputs=[upload_lora_file],
-        outputs=[lora_management_status]
+        outputs=[upload_lora_status]
     ).then(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
+    )
+    
+    use_existing_lora.change(
+        fn=toggle_base_lora,
+        inputs=[use_existing_lora],
+        outputs=[base_lora_adapter]
     )
     
     export_dataset_btn.click(
