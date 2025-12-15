@@ -74,14 +74,14 @@ os.makedirs("logs", exist_ok=True)
 timeline_service = TimelineService()
 export_service = ExportService()
 
-# Initialize HF storage and sync training data
-hf_storage = HFStorageService(repo_id="Gamahea/lemm-dataset")
-logger.info("🔄 Syncing training data from HuggingFace repo...")
-sync_result = hf_storage.sync_on_startup(
-    loras_dir=Path("models/loras"),
-    datasets_dir=Path("training_data")
-)
-logger.info(f"✅ Synced {len(sync_result['loras'])} LoRAs and {len(sync_result['datasets'])} datasets")
+# Initialize HF storage for LoRA uploads to dataset repo
+hf_storage = HFStorageService(username="Gamahea", dataset_repo="lemmdata")
+logger.info("🔍 Checking HuggingFace dataset repo for LoRAs...")
+sync_result = hf_storage.sync_on_startup(loras_dir=Path("models/loras"), datasets_dir=Path("training_data"))
+if sync_result.get('loras'):
+    logger.info(f"✅ Found {len(sync_result['loras'])} LoRA(s) in dataset repo")
+else:
+    logger.info("ℹ️ No LoRAs in dataset repo yet - train your first one!")
 
 # Lazy-load AI services (heavy models)
 diffrhythm_service = None
@@ -1182,16 +1182,6 @@ def prepare_datasets_for_training(selected_datasets, max_samples_per_dataset):
         if success_count > 0:
             status_messages.append(f"\n✅ Datasets are now ready for LoRA training!")
             status_messages.append(f"💡 Go to 'Training Configuration' tab to start training")
-            
-            # Upload prepared datasets to HF repo
-            status_messages.append(f"\n📤 Uploading prepared datasets to HuggingFace repo...")
-            upload_count = 0
-            for dataset_key in datasets_to_process:
-                dataset_dir = Path("training_data") / dataset_key
-                if dataset_dir.exists():
-                    if hf_storage.upload_dataset(dataset_dir):
-                        upload_count += 1
-            status_messages.append(f"✅ Uploaded {upload_count} dataset(s) to repo")
         
         return "\n".join(status_messages)
         
