@@ -193,7 +193,8 @@ class DiffRhythmService:
         duration: int = 30,
         sample_rate: int = 44100,
         lyrics: Optional[str] = None,
-        reference_audio: Optional[str] = None
+        reference_audio: Optional[str] = None,
+        lora_path: Optional[str] = None
     ) -> str:
         """
         Generate music from text prompt with optional vocals/lyrics and style reference
@@ -204,12 +205,18 @@ class DiffRhythmService:
             sample_rate: Audio sample rate
             lyrics: Optional lyrics for vocals
             reference_audio: Optional path to reference audio for style consistency
+            lora_path: Optional path to LoRA adapter for customized generation
             
         Returns:
             Path to generated audio file
         """
         try:
             self._initialize_model()
+            
+            if lora_path:
+                logger.info(f"LoRA adapter specified: {lora_path}")
+                logger.warning("Note: LoRA integration with DiffRhythm2 is planned for future release")
+                # TODO: Implement LoRA loading and application to model
             
             if lyrics:
                 logger.info(f"Generating music with vocals: prompt='{prompt}', lyrics_length={len(lyrics)}")

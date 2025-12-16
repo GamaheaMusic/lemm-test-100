@@ -431,11 +431,6 @@ class MasteringService:
                 # which adds subtle harmonic overtones
             ]
         ),
-    }
-    
-    def __init__(self):
-        """Initialize mastering service"""
-        logger.info("Mastering service initialized")
         
         # Specialized Presets
         "vocal_focused": MasteringPreset(

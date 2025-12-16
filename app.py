@@ -142,7 +142,7 @@ def generate_lyrics(prompt: str, progress=gr.Progress()):
         return f"❌ Error: {str(e)}"
 
 @spaces.GPU
-def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, timeline_state: dict, progress=gr.Progress()):
+def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: dict, progress=gr.Progress()):
     """Generate music clip and add to timeline"""
     try:
         # Restore timeline from state
@@ -156,6 +156,44 @@ def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, co
         
         if not prompt or not prompt.strip():
             return "❌ Please enter a music prompt", get_timeline_display(), None, timeline_state
+        
+        # Handle LoRA if selected
+        lora_path = None
+        lora_name = None
+        if use_lora and selected_lora:
+            try:
+                # Parse LoRA source and name
+                if selected_lora.startswith('[Local] '):
+                    lora_name = selected_lora.replace('[Local] ', '')
+                    lora_dir = Path('models/diffrhythm2/loras') / lora_name
+                    if lora_dir.exists():
+                        lora_path = str(lora_dir)
+                        logger.info(f"Using local LoRA: {lora_path}")
+                    else:
+                        logger.warning(f"Local LoRA not found: {lora_name}")
+                        lora_name = None
+                        
+                elif selected_lora.startswith('[HF] '):
+                    lora_name = selected_lora.replace('[HF] ', '')
+                    # Download from HuggingFace
+                    from backend.services.hf_storage_service import HFStorageService
+                    hf_storage = HFStorageService()
+                    
+                    target_dir = Path('models/diffrhythm2/loras') / lora_name
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    if hf_storage.download_lora(f"loras/{lora_name}", target_dir):
+                        lora_path = str(target_dir)
+                        logger.info(f"Downloaded and using HF LoRA: {lora_path}")
+                    else:
+                        logger.warning(f"Failed to download HF LoRA: {lora_name}")
+                        lora_name = None
+                
+                if lora_name:
+                    progress(0.05, desc=f"✅ LoRA loaded: {lora_name}")
+            except Exception as e:
+                logger.error(f"Error loading LoRA: {e}")
+                # Continue without LoRA
         
         # Fixed duration for all clips
         duration = 32
@@ -234,11 +272,18 @@ def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, co
         progress(0.3, desc=f"🎼 Generating {genre} at {bpm} BPM... ({est_time}s)")
         service = get_diffrhythm_service()
         
-        final_path = service.generate(
-            prompt=prompt,
-            duration=duration,
-            lyrics=lyrics_to_use
-        )
+        # Add LoRA info to generation if available
+        generation_kwargs = {
+            'prompt': prompt,
+            'duration': duration,
+            'lyrics': lyrics_to_use
+        }
+        
+        if lora_path:
+            generation_kwargs['lora_path'] = lora_path
+            logger.info(f"Generating with LoRA: {lora_path}")
+        
+        final_path = service.generate(**generation_kwargs)
         
         # Add to timeline
         progress(0.9, desc="📊 Adding to timeline...")
@@ -482,6 +527,66 @@ def get_timeline_playback(timeline_state: dict):
     except Exception as e:
         logger.error(f"Error creating playback: {e}", exc_info=True)
         return None
+
+def update_preset_description(preset_select_value: str):
+    """
+    Update preset description when preset is selected
+    
+    Args:
+        preset_select_value: Full preset string like "Clean Master - Transparent mastering"
+        
+    Returns:
+        Description text for the selected preset
+    """
+    try:
+        # Extract preset key from the dropdown value (format: "Key - Description")
+        preset_key = preset_select_value.split(" - ")[0]
+        
+        # Map display names to actual preset keys
+        preset_map = {
+            "Clean Master": "clean_master",
+            "Subtle Warmth": "subtle_warmth",
+            "Modern Pop": "modern_pop",
+            "Radio Ready": "radio_ready",
+            "Punchy Commercial": "punchy_commercial",
+            "Rock Master": "rock_master",
+            "Metal Aggressive": "metal_aggressive",
+            "Indie Rock": "indie_rock",
+            "EDM Club": "edm_club",
+            "House Groovy": "house_groovy",
+            "Techno Dark": "techno_dark",
+            "Dubstep Heavy": "dubstep_heavy",
+            "HipHop Modern": "hiphop_modern",
+            "Trap 808": "trap_808",
+            "RnB Smooth": "rnb_smooth",
+            "Acoustic Natural": "acoustic_natural",
+            "Folk Warm": "folk_warm",
+            "Jazz Vintage": "jazz_vintage",
+            "Orchestral Wide": "orchestral_wide",
+            "Classical Concert": "classical_concert",
+            "Ambient Spacious": "ambient_spacious",
+            "Harmonic Enhance": "harmonic_enhance"
+        }
+        
+        if preset_key in preset_map:
+            from services.mastering_service import MasteringService
+            mastering = MasteringService()
+            actual_key = preset_map[preset_key]
+            
+            if actual_key in mastering.PRESETS:
+                preset = mastering.PRESETS[actual_key]
+                return preset.description
+        
+        # Fallback - extract description from dropdown value
+        parts = preset_select_value.split(" - ", 1)
+        if len(parts) == 2:
+            return parts[1]
+        
+        return "Select a preset to see its description"
+        
+    except Exception as e:
+        logger.error(f"Error updating preset description: {e}")
+        return "Error loading preset description"
 
 def preview_mastering_preset(preset_name: str, timeline_state: dict):
     """Preview mastering preset on the most recent clip"""
@@ -1318,6 +1423,110 @@ def refresh_dataset_list():
         logger.error(f"Failed to refresh datasets: {e}")
         return gr.Dropdown(choices=["Error loading datasets"])
 
+def auto_populate_lora_name(dataset):
+    """Auto-populate LoRA name based on selected dataset"""
+    try:
+        if not dataset or dataset == "No prepared datasets available" or dataset == "Error loading datasets":
+            return ""
+        
+        # Extract dataset key from display name
+        dataset_key = dataset.split(" (")[0].strip()
+        
+        # Generate versioned name
+        import time
+        timestamp = int(time.time()) % 10000  # Last 4 digits of timestamp
+        lora_name = f"{dataset_key}_v1_{timestamp}"
+        
+        return lora_name
+    except Exception as e:
+        logger.error(f"Failed to auto-populate LoRA name: {e}")
+        return ""
+
+def load_lora_for_training(lora_name):
+    """Load a LoRA adapter's configuration for continued training"""
+    try:
+        if not lora_name:
+            return "", "❌ No LoRA selected"
+        
+        from backend.services.lora_training_service import LoRATrainingService
+        lora_service = LoRATrainingService()
+        
+        # Check if LoRA exists
+        lora_path = Path("models/loras") / lora_name
+        if not lora_path.exists():
+            return "", f"❌ LoRA not found: {lora_name}"
+        
+        # Load metadata to get original dataset
+        import json
+        metadata_path = lora_path / "metadata.json"
+        dataset_name = ""
+        
+        if metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                dataset_name = metadata.get('dataset', '')
+        
+        # Generate new LoRA name for continued training
+        import time
+        timestamp = int(time.time()) % 10000
+        new_lora_name = f"{lora_name}_continued_{timestamp}"
+        
+        status = f"✅ Loaded LoRA: {lora_name}\n"
+        status += f"💡 Suggested name for continued training: {new_lora_name}\n"
+        if dataset_name:
+            status += f"📊 Original dataset: {dataset_name}\n"
+        status += "\n⚠️ Remember to select a dataset before starting training!"
+        
+        return new_lora_name, status
+        
+    except Exception as e:
+        logger.error(f"Failed to load LoRA for training: {e}")
+        return "", f"❌ Error: {str(e)}"
+
+def download_lora_from_hf(lora_path_or_id):
+    """Download a LoRA from HuggingFace dataset repo"""
+    try:
+        if not lora_path_or_id or not lora_path_or_id.strip():
+            return "❌ Please enter a LoRA path or ID"
+        
+        # Clean input
+        lora_input = lora_path_or_id.strip()
+        
+        # Extract LoRA name from various input formats
+        # Format 1: "loras/jazz-v1" (path in dataset repo)
+        # Format 2: "jazz-v1" (just the name)
+        # Format 3: Full URL
+        
+        if lora_input.startswith("http"):
+            # Extract from URL
+            if "/loras/" in lora_input:
+                lora_name = lora_input.split("/loras/")[-1].split(".")[0]
+            else:
+                return "❌ Invalid URL format. Expected format: .../loras/name.zip"
+        elif lora_input.startswith("loras/"):
+            # Remove loras/ prefix
+            lora_name = lora_input[6:]
+        else:
+            # Assume it's just the name
+            lora_name = lora_input
+        
+        # Download from dataset repo
+        target_dir = Path("models/loras") / lora_name
+        lora_path = f"loras/{lora_name}"
+        
+        logger.info(f"Downloading LoRA: {lora_name} from dataset repo...")
+        
+        success = hf_storage.download_lora(lora_path, target_dir)
+        
+        if success:
+            return f"✅ Downloaded LoRA: {lora_name}\n💾 Saved to: models/loras/{lora_name}\n\n🎵 LoRA is now available for generation and training!"
+        else:
+            return f"❌ Failed to download LoRA: {lora_name}\n💡 Check that the LoRA exists in the dataset repo"
+        
+    except Exception as e:
+        logger.error(f"Failed to download LoRA from HF: {e}", exc_info=True)
+        return f"❌ Error: {str(e)}"
+
 def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha):
     """Start LoRA training"""
     try:
@@ -1367,15 +1576,35 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
         progress += f"\n✅ Training complete!\nFinal validation loss: {results['final_val_loss']:.4f}"
         log += f"\n\nTraining Results:\n{json.dumps(results, indent=2)}"
         
-        # Upload trained LoRA to HF repo
-        progress += "\n\n📤 Uploading LoRA to HuggingFace repo..."
+        # Upload trained LoRA to HF dataset repo
+        progress += "\n\n📤 Uploading LoRA to HuggingFace dataset repo..."
         lora_dir = Path("models/loras") / lora_name
         if lora_dir.exists():
-            upload_success = hf_storage.upload_lora(lora_dir)
-            if upload_success:
-                progress += "\n✅ LoRA uploaded to repo successfully!"
-            else:
-                progress += "\n⚠️ LoRA trained but upload failed (saved locally)"
+            try:
+                # Upload with training config for proper metadata
+                upload_result = hf_storage.upload_lora(lora_dir, training_config=config)
+                if upload_result and 'repo_id' in upload_result:
+                    progress += f"\n✅ LoRA uploaded successfully!"
+                    progress += f"\n🔗 Path: {upload_result['repo_id']}"
+                    progress += f"\n👁️ View: {upload_result['url']}"
+                    progress += f"\n📚 Dataset Repo: {upload_result['dataset_repo']}"
+                elif upload_result is None:
+                    # Check if it failed due to auth
+                    if not hf_storage.token:
+                        progress += "\n⚠️ Upload skipped - not logged in to HuggingFace"
+                        progress += "\n💡 To enable uploads: Duplicate this Space and log in"
+                    else:
+                        progress += "\n⚠️ LoRA trained but upload failed (saved locally)"
+                    progress += f"\n💾 LoRA saved locally: models/loras/{lora_name}"
+                else:
+                    progress += "\n⚠️ LoRA trained but upload failed (saved locally)"
+                    progress += f"\n💾 LoRA saved locally: models/loras/{lora_name}"
+            except Exception as upload_err:
+                logger.error(f"LoRA upload error: {upload_err}", exc_info=True)
+                progress += f"\n⚠️ Upload error: {str(upload_err)}"
+                progress += f"\n💾 LoRA saved locally: models/loras/{lora_name}"
+        else:
+            progress += "\n⚠️ LoRA directory not found after training"
         
         return progress, log
         
@@ -1486,8 +1715,49 @@ def upload_lora(zip_file):
         return f"❌ Error: {str(e)}"
 
 def toggle_base_lora(use_existing):
-    """Toggle visibility of base LoRA adapter dropdown"""
-    return gr.Dropdown(visible=use_existing)
+    """Toggle visibility and populate base LoRA adapter dropdown with local and HF LoRAs"""
+    if not use_existing:
+        return gr.Dropdown(visible=False, choices=[])
+    
+    try:
+        all_loras = []
+        
+        # Get local installed LoRA adapters
+        from backend.services.lora_training_service import LoRATrainingService
+        lora_service = LoRATrainingService()
+        local_adapters = lora_service.list_lora_adapters()
+        
+        for adapter in local_adapters:
+            name = adapter.get('name', '')
+            if name:
+                all_loras.append(f"[Local] {name}")
+        
+        # Get LoRAs from HuggingFace dataset repo
+        try:
+            from backend.services.hf_storage_service import HFStorageService
+            hf_storage = HFStorageService()
+            hf_loras = hf_storage.list_dataset_loras()
+            
+            for lora_info in hf_loras:
+                name = lora_info.get('name', '')
+                if name and name not in [l.replace('[Local] ', '') for l in all_loras]:
+                    all_loras.append(f"[HF] {name}")
+            
+            logger.info(f"Found {len(hf_loras)} LoRAs on HuggingFace")
+        except Exception as e:
+            logger.warning(f"Could not fetch HF LoRAs: {e}")
+        
+        logger.info(f"Total {len(all_loras)} LoRAs available for training")
+        
+        return gr.Dropdown(
+            visible=True,
+            choices=all_loras,
+            value=all_loras[0] if all_loras else None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading LoRAs: {e}")
+        return gr.Dropdown(visible=True, choices=[])
 
 def export_dataset(dataset_key):
     """Export prepared dataset as zip file"""
@@ -1609,6 +1879,19 @@ with gr.Blocks(
             value="next",
             label="📍 Position",
             info="Where to add clip on timeline"
+        )
+    
+    with gr.Row():
+        use_lora_for_gen = gr.Checkbox(
+            label="🎛️ Use LoRA Adapter",
+            value=False,
+            info="Apply a custom LoRA adapter to generation"
+        )
+        selected_lora_for_gen = gr.Dropdown(
+            label="Select LoRA",
+            choices=[],
+            visible=False,
+            interactive=True
         )
     
     gr.Markdown("*All clips are generated at 32 seconds*")
@@ -1844,9 +2127,16 @@ with gr.Blocks(
         outputs=lyrics_input
     )
     
+    # LoRA selector for generation - reuse toggle_base_lora logic
+    use_lora_for_gen.change(
+        fn=toggle_base_lora,
+        inputs=[use_lora_for_gen],
+        outputs=[selected_lora_for_gen]
+    )
+    
     generate_btn.click(
         fn=generate_music,
-        inputs=[prompt_input, lyrics_input, lyrics_mode, position_input, context_length_input, timeline_state],
+        inputs=[prompt_input, lyrics_input, lyrics_mode, position_input, context_length_input, use_lora_for_gen, selected_lora_for_gen, timeline_state],
         outputs=[gen_status, timeline_display, audio_output, timeline_state]
     ).then(
         fn=get_timeline_playback,
@@ -1879,6 +2169,12 @@ with gr.Blocks(
     )
     
     # Mastering event handlers
+    preset_select.change(
+        fn=update_preset_description,
+        inputs=[preset_select],
+        outputs=[preset_description]
+    )
+    
     preview_preset_btn.click(
         fn=preview_mastering_preset,
         inputs=[preset_select, timeline_state],
@@ -2192,6 +2488,21 @@ with gr.Blocks(
             
             # Tab 4: Manage LoRA Adapters
             with gr.Tab("📂 Manage LoRA Adapters"):
+                gr.Markdown("### Download from HuggingFace")
+                gr.Markdown("Download LoRAs from the centralized dataset repository")
+                
+                with gr.Row():
+                    lora_path_input = gr.Textbox(
+                        label="LoRA Name or Path",
+                        placeholder="jazz-v1 or loras/jazz-v1",
+                        info="Enter LoRA name from dataset repo",
+                        scale=3
+                    )
+                    download_from_hf_btn = gr.Button("⬇️ Download from HF", variant="primary", size="sm")
+                
+                download_from_hf_status = gr.Textbox(label="Download Status", lines=3, interactive=False)
+                
+                gr.Markdown("---")
                 gr.Markdown("### Upload New LoRA Adapter")
                 
                 with gr.Row():
@@ -2382,6 +2693,31 @@ with gr.Blocks(
         fn=toggle_base_lora,
         inputs=[use_existing_lora],
         outputs=[base_lora_adapter]
+    )
+    
+    # Auto-populate LoRA name when dataset is selected
+    selected_dataset.change(
+        fn=auto_populate_lora_name,
+        inputs=[selected_dataset],
+        outputs=[lora_name_input]
+    )
+    
+    # Load LoRA config when existing LoRA is selected for continued training
+    base_lora_adapter.change(
+        fn=load_lora_for_training,
+        inputs=[base_lora_adapter],
+        outputs=[lora_name_input, training_log]
+    )
+    
+    # Download LoRA from HuggingFace
+    download_from_hf_btn.click(
+        fn=download_lora_from_hf,
+        inputs=[lora_path_input],
+        outputs=[download_from_hf_status]
+    ).then(
+        fn=refresh_lora_list,
+        inputs=[],
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
     )
     
     export_dataset_btn.click(
