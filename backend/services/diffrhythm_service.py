@@ -125,6 +125,10 @@ class DiffRhythmService:
             # Load weights
             ckpt = load_file(model_ckpt)
             self.model.load_state_dict(ckpt)
+            self.model.eval()  # Set to evaluation mode
+            # Disable gradients for all parameters to allow ZeroGPU serialization
+            for param in self.model.parameters():
+                param.requires_grad = False
             # Note: Model will be moved to device inside GPU-decorated function
             
             # Load MuLan for style encoding (keep on CPU initially)
@@ -132,6 +136,10 @@ class DiffRhythmService:
                 "OpenMuQ/MuQ-MuLan-large",
                 cache_dir=os.path.join(self.model_path, "mulan")
             )
+            self.mulan.eval()  # Set to evaluation mode
+            # Disable gradients
+            for param in self.mulan.parameters():
+                param.requires_grad = False
             # Note: MuLan will be moved to device inside GPU-decorated function
             
             # Load tokenizer
@@ -176,6 +184,10 @@ class DiffRhythmService:
             
             # Load decoder (keep on CPU initially)
             self.decoder = Generator(decoder_config, decoder_ckpt)
+            self.decoder.eval()  # Set to evaluation mode
+            # Disable gradients
+            for param in self.decoder.parameters():
+                param.requires_grad = False
             # Note: Decoder will be moved to device inside GPU-decorated function
             
             logger.info("✅ DiffRhythm 2 model loaded successfully")
