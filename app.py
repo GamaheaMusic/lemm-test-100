@@ -160,6 +160,10 @@ def generate_lyrics(prompt: str, progress=gr.Progress()):
 def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: dict, progress=gr.Progress()):
     """Generate music clip and add to timeline"""
     try:
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -418,6 +422,10 @@ def get_timeline_display():
 def remove_clip(clip_number: int, timeline_state: dict):
     """Remove a clip from timeline"""
     try:
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -468,6 +476,10 @@ def clear_timeline(timeline_state: dict):
 def export_timeline(filename: str, export_format: str, timeline_state: dict, progress=gr.Progress()):
     """Export timeline to audio file"""
     try:
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -510,6 +522,10 @@ def get_timeline_playback(timeline_state: dict):
     """Get merged timeline audio for playback"""
     try:
         logger.info(f"[PLAYBACK] get_timeline_playback called with state: {timeline_state is not None}")
+        
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
         
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
@@ -606,6 +622,10 @@ def update_preset_description(preset_select_value: str):
 def preview_mastering_preset(preset_name: str, timeline_state: dict):
     """Preview mastering preset on the most recent clip"""
     try:
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -655,6 +675,10 @@ def apply_mastering_preset(preset_name: str, timeline_state: dict):
         logger.info(f"[STATE DEBUG] apply_mastering_preset called")
         logger.info(f"[STATE DEBUG] timeline_state type: {type(timeline_state)}")
         logger.info(f"[STATE DEBUG] timeline_state value: {timeline_state}")
+        
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
         
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
@@ -712,6 +736,10 @@ def apply_mastering_preset(preset_name: str, timeline_state: dict):
 def preview_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_state: dict):
     """Preview custom EQ on the most recent clip"""
     try:
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -767,6 +795,10 @@ def apply_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_stat
         logger.info(f"[STATE DEBUG] apply_custom_eq called")
         logger.info(f"[STATE DEBUG] timeline_state type: {type(timeline_state)}")
         logger.info(f"[STATE DEBUG] timeline_state value: {timeline_state}")
+        
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
         
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
@@ -831,6 +863,10 @@ def enhance_timeline_clips(enhancement_level: str, timeline_state: dict):
     try:
         logger.info(f"[ENHANCEMENT] Starting enhancement: level={enhancement_level}")
         
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
+        
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
             timeline_service.clips = []
@@ -888,6 +924,10 @@ def upscale_timeline_clips(upscale_mode: str, timeline_state: dict):
     """Upscale all clips in timeline to 48kHz"""
     try:
         logger.info(f"[UPSCALE] Starting upscale: mode={upscale_mode}")
+        
+        # Initialize timeline state if None
+        if timeline_state is None:
+            timeline_state = {'clips': []}
         
         # Restore timeline from state
         if timeline_state and 'clips' in timeline_state:
@@ -1851,7 +1891,8 @@ with gr.Blocks(
     )
     
     # Timeline state - persists across GPU context switches
-    timeline_state = gr.State(value={'clips': []})
+    # Use None to avoid Gradio schema validation errors
+    timeline_state = gr.State(value=None)
     
     # Generation Section
     gr.Markdown("### 🎼 Music Generation")

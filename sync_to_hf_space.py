@@ -27,7 +27,7 @@ for local_path, repo_path in files_to_sync:
         repo_type="space",
         path_or_fileobj=local_path,
         path_in_repo=repo_path,
-        commit_message=f"Add LoRA support to music generation - load from HF and local sources"
+        commit_message=f"Fix Gradio schema error: use None for timeline_state default"
     )
 
 print("✅ Sync complete! Space will restart automatically.")
