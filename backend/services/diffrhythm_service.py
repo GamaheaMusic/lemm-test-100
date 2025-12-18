@@ -17,14 +17,28 @@ import json
 # Import spaces for ZeroGPU support
 try:
     import spaces
-    HAS_SPACES = True
+    # Check if we're actually on ZeroGPU (has device-api)
+    import requests
+    try:
+        requests.head("http://device-api.zero/", timeout=0.5)
+        HAS_ZEROGPU = True
+    except:
+        HAS_ZEROGPU = False
 except ImportError:
-    HAS_SPACES = False
-    # Create a dummy decorator for local development
-    class spaces:
-        @staticmethod
-        def GPU(func):
+    HAS_ZEROGPU = False
+
+# Create appropriate decorator
+if HAS_ZEROGPU:
+    # Use ZeroGPU decorator
+    GPU_DECORATOR = spaces.GPU
+else:
+    # No-op decorator for regular GPU/CPU
+    def GPU_DECORATOR(duration=None):
+        def decorator(func):
             return func
+        if callable(duration):  # Called as @GPU_DECORATOR without parentheses
+            return duration
+        return decorator
 
 # Configure espeak-ng path for phonemizer (required by g2p module)
 # Note: Environment configuration handled by hf_config.py for HuggingFace Spaces
@@ -276,7 +290,7 @@ class DiffRhythmService:
             logger.error(f"Music generation failed: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to generate music: {str(e)}")
     
-    @spaces.GPU(duration=120)
+    @GPU_DECORATOR(duration=120)
     def _generate_with_diffrhythm2(
         self, 
         prompt: str, 

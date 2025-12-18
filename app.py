@@ -16,14 +16,24 @@ import time
 # Import spaces for ZeroGPU support
 try:
     import spaces
-    HAS_SPACES = True
+    # Check if we're actually on ZeroGPU (has device-api)
+    import requests
+    try:
+        requests.head("http://device-api.zero/", timeout=0.5)
+        HAS_ZEROGPU = True
+    except:
+        HAS_ZEROGPU = False
 except ImportError:
-    HAS_SPACES = False
-    # Create a dummy decorator for local development
-    class spaces:
-        @staticmethod
-        def GPU(func):
-            return func
+    HAS_ZEROGPU = False
+
+# Create appropriate decorator
+if HAS_ZEROGPU:
+    # Use ZeroGPU decorator
+    GPU_DECORATOR = spaces.GPU
+else:
+    # No-op decorator for regular GPU/CPU
+    def GPU_DECORATOR(func):
+        return func
 
 # Run DiffRhythm2 source setup if needed
 setup_script = Path(__file__).parent / "setup_diffrhythm2_src.sh"
@@ -46,6 +56,12 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Log GPU mode
+if HAS_ZEROGPU:
+    logger.info("🚀 ZeroGPU detected - using dynamic GPU allocation")
+else:
+    logger.info("💻 Running on regular GPU/CPU - using static device allocation")
 
 # Import services
 try:
@@ -105,7 +121,7 @@ def get_lyricmind_service():
         logger.info("LyricMind model loaded")
     return lyricmind_service
 
-@spaces.GPU
+@GPU_DECORATOR
 def generate_lyrics(prompt: str, progress=gr.Progress()):
     """Generate lyrics from prompt using analysis"""
     try:
