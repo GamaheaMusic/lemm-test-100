@@ -211,7 +211,11 @@ class DiffRhythmService:
             Path to generated audio file
         """
         try:
-            self._initialize_model()
+            # Initialize model on CPU BEFORE GPU function is called
+            # This prevents timeout issues with ZeroGPU
+            if not self.is_initialized:
+                logger.info("Pre-initializing DiffRhythm 2 model on CPU...")
+                self._initialize_model()
             
             if lora_path:
                 logger.info(f"LoRA adapter specified: {lora_path}")
@@ -260,7 +264,7 @@ class DiffRhythmService:
             logger.error(f"Music generation failed: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to generate music: {str(e)}")
     
-    @spaces.GPU(duration=60)
+    @spaces.GPU(duration=120)
     def _generate_with_diffrhythm2(
         self, 
         prompt: str, 
