@@ -1,5 +1,5 @@
 # Core dependencies for HuggingFace Spaces deployment
-gradio>=5.0.0
+gradio==4.42.0
 spaces>=0.28.3
 numpy>=1.24.0,<2.0.0
 scipy>=1.10.0
