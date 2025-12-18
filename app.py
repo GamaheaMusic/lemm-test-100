@@ -160,12 +160,8 @@ def generate_lyrics(prompt: str, progress=gr.Progress()):
 def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: dict, progress=gr.Progress()):
     """Generate music clip and add to timeline"""
     try:
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
         # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
+        if 'clips' in timeline_state:
             timeline_service.clips = []
             for clip_data in timeline_state['clips']:
                 from models.schemas import TimelineClip
@@ -422,12 +418,8 @@ def get_timeline_display():
 def remove_clip(clip_number: int, timeline_state: dict):
     """Remove a clip from timeline"""
     try:
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
         # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
+        if 'clips' in timeline_state:
             timeline_service.clips = []
             for clip_data in timeline_state['clips']:
                 from models.schemas import TimelineClip
@@ -1891,8 +1883,8 @@ with gr.Blocks(
     )
     
     # Timeline state - persists across GPU context switches
-    # Use None to avoid Gradio schema validation errors
-    timeline_state = gr.State(value=None)
+    # Initialize with empty dict to avoid Gradio schema validation errors
+    timeline_state = gr.State(value={'clips': []})
     
     # Generation Section
     gr.Markdown("### 🎼 Music Generation")
