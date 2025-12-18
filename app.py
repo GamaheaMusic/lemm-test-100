@@ -141,7 +141,6 @@ def generate_lyrics(prompt: str, progress=gr.Progress()):
         logger.error(f"Error generating lyrics: {e}", exc_info=True)
         return f"❌ Error: {str(e)}"
 
-@spaces.GPU
 def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: dict, progress=gr.Progress()):
     """Generate music clip and add to timeline"""
     try:
