@@ -15,8 +15,8 @@ requests>=2.31.0
 # PyTorch - CPU mode for compatibility
 # Note: DiffRhythm2 requires torch>=2.4 which is incompatible with torch-directml
 # Using CPU mode to avoid version conflicts. For GPU acceleration, use NVIDIA CUDA.
-torch>=2.4.0
-torchaudio>=2.4.0
+torch==2.4.0
+torchaudio==2.4.0
 
 # DiffRhythm 2 core dependencies
 torchdiffeq>=0.2.4  # Required for CFM (flow matching)
@@ -36,33 +36,31 @@ transformers==4.47.1  # Pinned for DiffRhythm2 compatibility
 diffusers>=0.21.0
 sentencepiece>=0.1.99
 protobuf>=3.20.0
-accelerate>=0.20.0
-einops>=0.7.0
-omegaconf>=2.3.0
+accelerate==0.33.0
+einops==0.8.0
+omegaconf==2.3.0
 
 # Audio processing
-pedalboard>=0.7.0
-pydub>=0.25.1
-resampy>=0.4.2
-mutagen>=1.47.0
+pedalboard==0.9.9
+pydub==0.25.1
+resampy==0.4.3
+mutagen==1.47.0
 
 # Audio quality enhancement
 demucs==4.0.1  # Stem separation
 
 # MSD Integration (v1.0.2)
-h5py>=3.10.0  # For reading MSD HDF5 files
-tqdm>=4.65.0  # Progress bars for data import
-noisereduce>=3.0.0  # Noise reduction
-audiosr>=0.0.7  # Audio super resolution (upscaling to 48kHz)
+h5py==3.10.0  # For reading MSD HDF5 files
+tqdm==4.66.5  # Progress bars for data import
+noisereduce==3.0.2  # Noise reduction
 
 # LoRA Training dependencies
-peft>=0.6.0  # Parameter-Efficient Fine-Tuning (LoRA adapters)
-datasets>=2.14.0  # HuggingFace datasets for training data management
-tensorboard>=2.13.0  # Training monitoring and visualization
-wandb>=0.15.0  # Optional: Advanced experiment tracking
+peft==0.11.0  # Parameter-Efficient Fine-Tuning (LoRA adapters)
+datasets==2.19.0  # HuggingFace datasets for training data management
+tensorboard==2.16.2  # Training monitoring and visualization
+wandb==0.17.0  # Optional: Advanced experiment tracking
 
 # Utilities
-tqdm>=4.65.0
-huggingface-hub>=0.17.0
-safetensors>=0.3.0
-gitpython>=3.1.0
+huggingface-hub==0.23.0
+safetensors==0.4.3
+gitpython==3.1.43
