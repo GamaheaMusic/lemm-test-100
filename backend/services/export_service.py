@@ -57,52 +57,60 @@ class ExportService:
                 
                 audio_data.append(audio)
             
-            # Apply crossfading between clips (2 second overlap)
-            crossfade_duration = 2.0  # seconds
+            # Apply industry-standard crossfading between clips
+            # Uses equal-power crossfading for smooth transitions
+            crossfade_duration = 2.0  # seconds overlap
             crossfade_samples = int(crossfade_duration * sample_rate)
             
             if len(audio_data) == 1:
                 # Single clip, no crossfading needed
                 merged_audio = audio_data[0]
             else:
-                # Start with first clip
+                # Start with first clip (keep lead-out intact for crossfade)
                 merged_audio = audio_data[0].copy()
                 
-                # Crossfade each subsequent clip
+                # Crossfade each subsequent clip with proper overlap
                 for i in range(1, len(audio_data)):
                     current_clip = audio_data[i]
                     
-                    # Calculate overlap region
+                    # Calculate actual overlap (limited by clip lengths)
                     overlap_samples = min(crossfade_samples, len(merged_audio), len(current_clip))
                     
                     if overlap_samples > 0:
-                        # Create fade out curve for end of previous audio
-                        fade_out = np.linspace(1.0, 0.0, overlap_samples)
-                        # Create fade in curve for start of current clip
-                        fade_in = np.linspace(0.0, 1.0, overlap_samples)
+                        # Equal-power crossfade curves (sqrt for energy preservation)
+                        # This creates a smooth, professional-sounding crossfade
+                        fade_out = np.sqrt(np.linspace(1.0, 0.0, overlap_samples))
+                        fade_in = np.sqrt(np.linspace(0.0, 1.0, overlap_samples))
                         
                         # Handle stereo vs mono
                         if merged_audio.ndim == 2:
                             fade_out = fade_out[:, np.newaxis]
                             fade_in = fade_in[:, np.newaxis]
                         
-                        # Apply crossfade
-                        merged_audio[-overlap_samples:] = (
-                            merged_audio[-overlap_samples:] * fade_out +
+                        # CRITICAL: Remove the overlap region from merged_audio end
+                        # so we actually overlap, not append
+                        merged_audio = merged_audio[:-overlap_samples]
+                        
+                        # Create the crossfaded overlap region
+                        # This mixes the last overlap_samples of previous clip with
+                        # the first overlap_samples of current clip
+                        overlap_region = (
+                            audio_data[i-1][-overlap_samples:] * fade_out +
                             current_clip[:overlap_samples] * fade_in
                         )
                         
-                        # Append the rest of the current clip
-                        if len(current_clip) > overlap_samples:
-                            merged_audio = np.concatenate([
-                                merged_audio,
-                                current_clip[overlap_samples:]
-                            ])
+                        # Append the crossfaded overlap and rest of current clip
+                        merged_audio = np.concatenate([
+                            merged_audio,
+                            overlap_region,
+                            current_clip[overlap_samples:]
+                        ])
                         
-                        logger.info(f"Applied {crossfade_duration}s crossfade between clips {i-1} and {i}")
+                        logger.info(f"Applied {crossfade_duration}s equal-power crossfade between clips {i-1} and {i} (overlap: {overlap_samples} samples)")
                     else:
                         # No overlap possible, just concatenate
                         merged_audio = np.concatenate([merged_audio, current_clip])
+                        logger.warning(f"Clips {i-1} and {i} too short for crossfade, concatenating instead")
             
             # Normalize
             max_val = np.abs(merged_audio).max()

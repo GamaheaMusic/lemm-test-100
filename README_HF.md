@@ -14,7 +14,11 @@ license: mit
 
 Create AI-powered music with intelligent prompt analysis and context-aware generation using DiffRhythm2 and LyricMind AI.
 
-**⚠️ Note:** This Space requires ZeroGPU to run. Please enable ZeroGPU in the Space settings: Settings → Hardware → Select "ZeroGPU" or upgrade to a GPU-enabled tier.
+**⚠️ Important:** 
+- This Space requires ZeroGPU to run
+- **You must be logged in** to HuggingFace to use GPU features
+- Free users get daily ZeroGPU quota - check your usage at https://huggingface.co/settings/billing
+- If you see quota errors while logged in, try duplicating this Space to your account
 
 ## Features
 
