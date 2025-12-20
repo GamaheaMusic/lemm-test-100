@@ -49,6 +49,10 @@ models/
 # Data
 uploads/
 outputs/
+
+# External binaries (espeak-ng)
+external/
+outputs/
 temp/
 
 # HuggingFace Space clone
