@@ -102,6 +102,8 @@ export_service = ExportService()
 msd_db_service = None
 genre_profiler = None
 msd_importer = None
+lakh_midi_service = None
+theory_constraint_service = None
 
 def initialize_msd_services():
     """Lazy initialization of MSD services"""
@@ -125,6 +127,26 @@ def initialize_msd_services():
         msd_db_service = None
         genre_profiler = None
         msd_importer = None
+
+def initialize_theory_services():
+    """Lazy initialization of music theory services"""
+    global lakh_midi_service, theory_constraint_service
+    
+    if theory_constraint_service is not None:
+        return  # Already initialized
+    
+    try:
+        from services.lakh_midi_service import LakhMIDIService
+        from services.theory_constraint_service import TheoryConstraintService
+        
+        lakh_midi_service = LakhMIDIService()
+        theory_constraint_service = TheoryConstraintService()
+        
+        logger.info("✅ Music theory services initialized successfully")
+    except Exception as e:
+        logger.warning(f"⚠️ Music theory services not available: {e}")
+        lakh_midi_service = None
+        theory_constraint_service = None
 
 # Initialize HF storage for LoRA uploads to dataset repo
 hf_storage = HFStorageService(username="Gamahea", dataset_repo="lemmdata")
@@ -2165,6 +2187,126 @@ def get_msd_database_stats():
         logger.error(f"Error getting database stats: {e}")
         return f"Error: {str(e)}"
 
+# Music Theory Functions
+def get_theory_suggestions(genre: str, tempo: float, key_index: int, mode_index: int):
+    """Get comprehensive music theory suggestions"""
+    initialize_theory_services()
+    
+    if not theory_constraint_service:
+        return "Music theory services not available"
+    
+    try:
+        # Convert indices to values
+        key_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        mode_names = ['minor', 'major']
+        
+        key = key_index
+        mode = mode_index
+        
+        suggestions = theory_constraint_service.suggest_generation_constraints(
+            genre, tempo, key, mode
+        )
+        
+        # Format output
+        prog_str = '\n'.join([
+            f"- {i+1}. {' → '.join(p['progression'])}: {p['description']}"
+            for i, p in enumerate(suggestions.get('recommended_progressions', []))
+        ])
+        
+        compat_keys = '\n'.join([
+            f"- {k['key_name']} {k['mode_name']}: {k['relationship']} ({k['strength']})"
+            for k in suggestions.get('compatible_keys', [])
+        ])
+        
+        output = f"""
+### 🎼 Music Theory Suggestions
+
+**Key:** {suggestions['key']} {suggestions['mode']}  
+**Scale Notes:** {', '.join(suggestions.get('scale_notes', []))}  
+**Tempo:** {tempo} BPM  
+**Genre:** {genre}
+
+---
+
+### 🎵 Recommended Chord Progressions
+{prog_str}
+
+---
+
+### 🔄 Compatible Keys for Transitions
+{compat_keys}
+
+---
+
+### ⚙️ Generation Constraints
+- **Allowed Notes:** {', '.join([suggestions['scale_notes'][i] for i in range(min(7, len(suggestions['scale_notes'])))])}
+- **Tempo Range:** {suggestions['constraints']['tempo_range'][0]:.0f} - {suggestions['constraints']['tempo_range'][1]:.0f} BPM
+- **Time Signature:** {suggestions['constraints'].get('time_signature', '4/4')}
+
+💡 *These suggestions are based on music theory principles and common practices*
+"""
+        
+        return output
+        
+    except Exception as e:
+        logger.error(f"Error getting theory suggestions: {e}")
+        return f"Error: {str(e)}"
+
+def import_midi_sample_data(count: int = 100):
+    """Import sample MIDI data for testing"""
+    initialize_theory_services()
+    
+    if not lakh_midi_service:
+        return "❌ MIDI services not available"
+    
+    try:
+        logger.info(f"Importing {count} sample MIDI files...")
+        result = lakh_midi_service.import_sample_data(count)
+        
+        status = f"""
+✅ MIDI Import Complete!
+
+**MIDI Files Imported:** {result['imported']} / {result['total']}
+**Failed:** {result['failed']}
+
+MIDI database is ready for chord progression analysis!
+"""
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error importing MIDI data: {e}")
+        return f"❌ Error: {str(e)}"
+
+def get_midi_stats():
+    """Get MIDI database statistics"""
+    initialize_theory_services()
+    
+    if not lakh_midi_service:
+        return "MIDI services not available"
+    
+    try:
+        stats = lakh_midi_service.get_midi_stats()
+        
+        if stats.get('total_midi_files', 0) == 0:
+            return "MIDI database is empty. Click 'Import MIDI Data' to get started."
+        
+        stats_text = f"""
+### 📊 MIDI Database Statistics
+
+**Total MIDI Files:** {stats.get('total_midi_files', 0):,}
+**Chord Progressions:** {stats.get('total_progressions', 0):,}
+**Average Tempo:** {stats.get('avg_tempo', 0):.0f} BPM
+
+Database contains analyzed chord progressions and melodic patterns for music theory-aware generation!
+"""
+        
+        return stats_text
+        
+    except Exception as e:
+        logger.error(f"Error getting MIDI stats: {e}")
+        return f"Error: {str(e)}"
+
 # Create Gradio interface
 with gr.Blocks(
     title="LEMM - Let Everyone Make Music v1.0.0 (beta)",
@@ -2236,6 +2378,50 @@ with gr.Blocks(
             )
             
             msd_status_output = gr.Markdown(value="")
+    
+    # Music Theory Suggestions (Phase 2)
+    with gr.Accordion("🎼 Music Theory & Chord Progressions (Beta)", open=False):
+        gr.Markdown("""
+            Get AI-powered music theory suggestions including chord progressions,
+            compatible keys, and theory-based constraints for your generation!
+        """)
+        
+        with gr.Row():
+            theory_genre = gr.Dropdown(
+                label="Genre",
+                choices=["pop", "rock", "jazz", "blues", "electronic", "metal", "hip-hop", "classical"],
+                value="pop"
+            )
+            theory_tempo = gr.Slider(
+                minimum=60,
+                maximum=200,
+                value=120,
+                step=5,
+                label="Tempo (BPM)"
+            )
+        
+        with gr.Row():
+            theory_key = gr.Dropdown(
+                label="Key",
+                choices=["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"],
+                value="C"
+            )
+            theory_mode = gr.Dropdown(
+                label="Mode",
+                choices=["minor", "major"],
+                value="major"
+            )
+        
+        get_theory_btn = gr.Button("🔍 Get Theory Suggestions", variant="primary")
+        
+        theory_output = gr.Markdown(value="Click 'Get Theory Suggestions' to see recommendations")
+        
+        with gr.Accordion("📊 MIDI Database Management", open=False):
+            with gr.Row():
+                import_midi_btn = gr.Button("Import MIDI Data (100 files)", size="sm")
+                show_midi_stats_btn = gr.Button("Show MIDI Stats", size="sm")
+            
+            midi_status_output = gr.Markdown(value="")
     
     lyrics_mode = gr.Radio(
         choices=["Instrumental", "User Lyrics", "Auto Lyrics"],
@@ -2543,6 +2729,29 @@ with gr.Blocks(
         fn=get_msd_database_stats,
         inputs=[],
         outputs=[msd_status_output]
+    )
+    
+    # Music Theory Event Handlers
+    get_theory_btn.click(
+        fn=lambda g, t, k, m: get_theory_suggestions(
+            g, t, 
+            ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].index(k),
+            ["minor", "major"].index(m)
+        ),
+        inputs=[theory_genre, theory_tempo, theory_key, theory_mode],
+        outputs=[theory_output]
+    )
+    
+    import_midi_btn.click(
+        fn=lambda: import_midi_sample_data(100),
+        inputs=[],
+        outputs=[midi_status_output]
+    )
+    
+    show_midi_stats_btn.click(
+        fn=get_midi_stats,
+        inputs=[],
+        outputs=[midi_status_output]
     )
     
     auto_gen_btn.click(
