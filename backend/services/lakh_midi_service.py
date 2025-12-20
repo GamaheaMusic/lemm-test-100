@@ -38,8 +38,14 @@ class LakhMIDIService:
             db_path: Path to SQLite database
         """
         self.db_path = db_path
+        self._ensure_data_directory()
         self._initialize_midi_tables()
         logger.info(f"Lakh MIDI Service initialized: {db_path}")
+    
+    def _ensure_data_directory(self):
+        """Create data directory if it doesn't exist."""
+        data_dir = Path(self.db_path).parent
+        data_dir.mkdir(parents=True, exist_ok=True)
     
     def _initialize_midi_tables(self):
         """Create MIDI-related database tables."""
