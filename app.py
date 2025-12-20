@@ -1,6 +1,8 @@
 """
 Music Generation Studio - HuggingFace Spaces Deployment
 Main application file for Gradio interface
+
+Version: 1.0.2
 """
 import os
 import sys
@@ -12,6 +14,9 @@ import shutil
 import subprocess
 import json
 import time
+
+# Import version info
+from version import __version__
 
 # Import spaces for ZeroGPU support
 try:

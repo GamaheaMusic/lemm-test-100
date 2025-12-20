@@ -1,8 +1,8 @@
 # LEMM - Let Everyone Make Music
 
-**Version 1.0.0 (Beta)**
+**Version 1.0.2 (Beta)**
 
-An advanced AI music generation system with **training capabilities**, built-in vocals, professional mastering, and audio enhancement. Powered by DiffRhythm2 with LoRA fine-tuning support.
+An advanced AI music generation system with **training capabilities**, built-in vocals, professional mastering, audio enhancement, and **music theory intelligence**. Powered by DiffRhythm2 with LoRA fine-tuning support and symbolic music understanding.
 
 🎵 **Live Demo**: [Try LEMM on HuggingFace Spaces](https://huggingface.co/spaces/Gamahea/lemm-test-100)  
 📦 **LoRA Collection**: [Browse Trained Models](https://huggingface.co/collections/Gamahea/lemm-100-pre-beta)  
