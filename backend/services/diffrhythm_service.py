@@ -288,7 +288,19 @@ class DiffRhythmService:
             
         except Exception as e:
             logger.error(f"Music generation failed: {str(e)}", exc_info=True)
-            raise RuntimeError(f"Failed to generate music: {str(e)}")
+            
+            # Provide more helpful error messages for common issues
+            error_str = str(e)
+            if "ZeroGPU quota" in error_str or "running out of daily" in error_str:
+                raise RuntimeError(
+                    "ZeroGPU quota limit reached. Please:\n"
+                    "1. Make sure you're logged into HuggingFace\n"
+                    "2. Check your quota at https://huggingface.co/settings/billing\n"
+                    "3. Consider duplicating this Space to your account for dedicated quota\n"
+                    f"\nOriginal error: {error_str}"
+                )
+            else:
+                raise RuntimeError(f"Failed to generate music: {str(e)}")
     
     @GPU_DECORATOR(duration=120)
     def _generate_with_diffrhythm2(

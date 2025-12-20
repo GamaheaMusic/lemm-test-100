@@ -13,6 +13,16 @@ import torch
 
 logger = logging.getLogger(__name__)
 
+# Try to import mutagen for metadata extraction
+try:
+    from mutagen import File as MutagenFile
+    from mutagen.id3 import ID3
+    from mutagen.easyid3 import EasyID3
+    MUTAGEN_AVAILABLE = True
+except ImportError:
+    MUTAGEN_AVAILABLE = False
+    logger.warning("mutagen not available - embedded metadata extraction disabled")
+
 
 class AudioAnalysisService:
     """Service for analyzing audio files and generating metadata"""
@@ -33,18 +43,82 @@ class AudioAnalysisService:
         
         logger.info("AudioAnalysisService initialized")
     
+    def extract_embedded_metadata(self, audio_path: str) -> Dict:
+        """
+        Extract embedded metadata from audio file tags (ID3, etc.)
+        
+        Args:
+            audio_path: Path to audio file
+            
+        Returns:
+            Dictionary with extracted metadata (empty dict if not available)
+        """
+        if not MUTAGEN_AVAILABLE:
+            return {}
+        
+        try:
+            audio_file = MutagenFile(audio_path, easy=True)
+            if audio_file is None:
+                return {}
+            
+            metadata = {}
+            
+            # Extract common tags
+            if 'genre' in audio_file:
+                genre = audio_file['genre'][0] if isinstance(audio_file['genre'], list) else audio_file['genre']
+                metadata['genre'] = str(genre).lower()
+                logger.info(f"Found embedded genre: {metadata['genre']}")
+            
+            if 'bpm' in audio_file:
+                bpm = audio_file['bpm'][0] if isinstance(audio_file['bpm'], list) else audio_file['bpm']
+                try:
+                    metadata['bpm'] = int(float(bpm))
+                    logger.info(f"Found embedded BPM: {metadata['bpm']}")
+                except (ValueError, TypeError):
+                    pass
+            
+            # Try to extract key/mood from comments or initialkey tag
+            if 'initialkey' in audio_file:
+                key = audio_file['initialkey'][0] if isinstance(audio_file['initialkey'], list) else audio_file['initialkey']
+                metadata['key'] = str(key)
+                logger.info(f"Found embedded key: {metadata['key']}")
+            
+            if 'comment' in audio_file:
+                comment = audio_file['comment'][0] if isinstance(audio_file['comment'], list) else audio_file['comment']
+                metadata['description'] = str(comment)
+                logger.info(f"Found embedded comment/description")
+            
+            # Extract artist and title for additional context
+            if 'artist' in audio_file:
+                artist = audio_file['artist'][0] if isinstance(audio_file['artist'], list) else audio_file['artist']
+                metadata['artist'] = str(artist)
+            
+            if 'title' in audio_file:
+                title = audio_file['title'][0] if isinstance(audio_file['title'], list) else audio_file['title']
+                metadata['title'] = str(title)
+            
+            if metadata:
+                logger.info(f"Extracted {len(metadata)} metadata field(s) from file tags")
+            
+            return metadata
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract embedded metadata: {str(e)}")
+            return {}
+    
     def analyze_audio(self, audio_path: str) -> Dict:
         """
-        Analyze audio file and generate comprehensive metadata
+        Analyze audio file and generate comprehensive metadata.
+        Prioritizes embedded metadata when available, only analyzing what's missing.
         
         Args:
             audio_path: Path to audio file
             
         Returns:
             Dictionary containing:
-                - bpm: Detected tempo
-                - key: Detected musical key
-                - genre: Predicted genre
+                - bpm: Detected tempo (from tags or analysis)
+                - key: Detected musical key (from tags or analysis)
+                - genre: Predicted genre (from tags or analysis)
                 - duration: Audio duration in seconds
                 - energy: Overall energy level
                 - spectral_features: Various spectral characteristics
@@ -53,20 +127,42 @@ class AudioAnalysisService:
         try:
             logger.info(f"Analyzing audio: {audio_path}")
             
-            # Load audio
-            y, sr = librosa.load(audio_path, sr=self.sample_rate)
+            # First, try to extract embedded metadata
+            embedded_metadata = self.extract_embedded_metadata(audio_path)
             
-            # Extract features
-            bpm = self._detect_tempo(y, sr)
-            key = self._detect_key(y, sr)
-            genre = self._predict_genre(y, sr)
+            # Load audio for analysis
+            y, sr = librosa.load(audio_path, sr=self.sample_rate)
             duration = librosa.get_duration(y=y, sr=sr)
+            
+            # Use embedded metadata when available, otherwise analyze
+            if 'bpm' in embedded_metadata and embedded_metadata['bpm']:
+                bpm = embedded_metadata['bpm']
+                logger.info(f"Using embedded BPM: {bpm}")
+            else:
+                bpm = self._detect_tempo(y, sr)
+                logger.info(f"Analyzed BPM: {bpm}")
+            
+            if 'key' in embedded_metadata and embedded_metadata['key']:
+                key = embedded_metadata['key']
+                logger.info(f"Using embedded key: {key}")
+            else:
+                key = self._detect_key(y, sr)
+                logger.info(f"Analyzed key: {key}")
+            
+            if 'genre' in embedded_metadata and embedded_metadata['genre']:
+                genre = embedded_metadata['genre']
+                logger.info(f"Using embedded genre: {genre}")
+            else:
+                genre = self._predict_genre(y, sr)
+                logger.info(f"Analyzed genre: {genre}")
+            
+            # Always analyze these features
             energy = self._calculate_energy(y)
             spectral_features = self._extract_spectral_features(y, sr)
             segments = self._suggest_segments(y, sr, duration)
             
             metadata = {
-                'bpm': int(bpm),
+                'bpm': int(bpm) if not isinstance(bpm, int) else bpm,
                 'key': key,
                 'genre': genre,
                 'duration': round(duration, 2),
@@ -74,10 +170,19 @@ class AudioAnalysisService:
                 'spectral_features': spectral_features,
                 'segments': segments,
                 'sample_rate': sr,
-                'channels': 1 if y.ndim == 1 else y.shape[0]
+                'channels': 1 if y.ndim == 1 else y.shape[0],
+                'has_embedded_metadata': bool(embedded_metadata)
             }
             
-            logger.info(f"Analysis complete: BPM={bpm}, Key={key}, Genre={genre}")
+            # Add any additional embedded metadata
+            if 'description' in embedded_metadata:
+                metadata['description'] = embedded_metadata['description']
+            if 'artist' in embedded_metadata:
+                metadata['artist'] = embedded_metadata['artist']
+            if 'title' in embedded_metadata:
+                metadata['title'] = embedded_metadata['title']
+            
+            logger.info(f"Analysis complete: BPM={bpm}, Key={key}, Genre={genre} (embedded={bool(embedded_metadata)})")
             return metadata
             
         except Exception as e:

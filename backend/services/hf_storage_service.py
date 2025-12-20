@@ -348,7 +348,7 @@ MIT License - Free to use and modify
     
     def upload_dataset(self, dataset_dir: Path, dataset_info: Optional[Dict] = None) -> Optional[Dict]:
         """
-        Upload a prepared dataset to HF dataset repo
+        Upload a prepared dataset as ZIP file to HF dataset repo
         
         Args:
             dataset_dir: Local dataset directory
@@ -356,4 +356,60 @@ MIT License - Free to use and modify
             
         Returns:
             Dict with upload results or None if failed
-        \"\"\"\n        if not self.has_hf:\n            logger.info(f\"💾 Dataset saved locally: {dataset_dir.name}\")\n            return None\n        \n        if not self.token:\n            logger.warning(\"⚠️ No HuggingFace token found - cannot upload dataset\")\n            logger.info(f\"💾 Dataset saved locally: {dataset_dir.name}\")\n            return None\n        \n        try:\n            from huggingface_hub import upload_folder\n            \n            dataset_name = dataset_dir.name\n            \n            logger.info(f\"📤 Uploading dataset to repo: {self.repo_id}/datasets/{dataset_name}...\")\n            \n            # Upload to datasets/ folder in dataset repo\n            upload_folder(\n                repo_id=self.repo_id,\n                repo_type=\"dataset\",\n                folder_path=str(dataset_dir),\n                path_in_repo=f\"datasets/{dataset_name}\",\n                commit_message=f\"Upload prepared dataset: {dataset_name}\",\n                token=self.token\n            )\n            \n            logger.info(f\"✅ Uploaded dataset: {self.repo_id}/datasets/{dataset_name}\")\n            \n            return {\n                'repo_id': f\"{self.repo_id}/datasets/{dataset_name}\",\n                'url': f\"https://huggingface.co/datasets/{self.repo_id}/tree/main/datasets/{dataset_name}\",\n                'dataset_repo': f\"https://huggingface.co/datasets/{self.repo_id}\"\n            }\n            \n        except Exception as e:\n            logger.error(f\"Failed to upload dataset: {e}\")\n            logger.info(f\"💾 Dataset saved locally: {dataset_dir.name}\")\n            return None
+        """
+        if not self.has_hf:
+            logger.info(f"💾 Dataset saved locally: {dataset_dir.name}")
+            return None
+        
+        if not self.token:
+            logger.warning("⚠️ No HuggingFace token found - cannot upload dataset")
+            logger.info(f"💾 Dataset saved locally: {dataset_dir.name}")
+            return None
+        
+        try:
+            from huggingface_hub import upload_file
+            import zipfile
+            import tempfile
+            
+            dataset_name = dataset_dir.name
+            
+            logger.info(f"📤 Creating ZIP and uploading dataset to repo: {self.repo_id}/datasets/{dataset_name}.zip...")
+            
+            # Create ZIP file
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.zip', delete=False) as tmp_file:
+                zip_path = tmp_file.name
+            
+            try:
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for file_path in dataset_dir.rglob('*'):
+                        if file_path.is_file():
+                            arcname = file_path.relative_to(dataset_dir)
+                            zipf.write(file_path, arcname)
+                
+                # Upload ZIP to datasets/ folder in dataset repo
+                upload_file(
+                    repo_id=self.repo_id,
+                    repo_type="dataset",
+                    path_or_fileobj=zip_path,
+                    path_in_repo=f"datasets/{dataset_name}.zip",
+                    commit_message=f"Upload prepared dataset: {dataset_name}",
+                    token=self.token
+                )
+            finally:
+                # Clean up temp file
+                import os
+                if os.path.exists(zip_path):
+                    os.unlink(zip_path)
+            
+            logger.info(f"✅ Uploaded dataset: {self.repo_id}/datasets/{dataset_name}.zip")
+            
+            return {
+                'repo_id': f"{self.repo_id}/datasets/{dataset_name}.zip",
+                'url': f"https://huggingface.co/datasets/{self.repo_id}/blob/main/datasets/{dataset_name}.zip",
+                'dataset_repo': f"https://huggingface.co/datasets/{self.repo_id}"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to upload dataset: {e}")
+            logger.info(f"💾 Dataset saved locally: {dataset_dir.name}")
+            return None

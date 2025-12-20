@@ -28,12 +28,15 @@ except ImportError:
 
 # Create appropriate decorator
 if HAS_ZEROGPU:
-    # Use ZeroGPU decorator
-    GPU_DECORATOR = spaces.GPU
+    # Use ZeroGPU decorator - make it callable with duration parameter
+    def GPU_DECORATOR(duration=120):
+        return spaces.GPU(duration=duration)
 else:
     # No-op decorator for regular GPU/CPU
-    def GPU_DECORATOR(func):
-        return func
+    def GPU_DECORATOR(duration=120):
+        def decorator(func):
+            return func
+        return decorator
 
 # Run DiffRhythm2 source setup if needed
 setup_script = Path(__file__).parent / "setup_diffrhythm2_src.sh"
@@ -121,7 +124,7 @@ def get_lyricmind_service():
         logger.info("LyricMind model loaded")
     return lyricmind_service
 
-@GPU_DECORATOR
+@GPU_DECORATOR(duration=60)
 def generate_lyrics(prompt: str, progress=gr.Progress()):
     """Generate lyrics from prompt using analysis"""
     try:
@@ -157,17 +160,60 @@ def generate_lyrics(prompt: str, progress=gr.Progress()):
         logger.error(f"Error generating lyrics: {e}", exc_info=True)
         return f"❌ Error: {str(e)}"
 
-def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: dict, progress=gr.Progress()):
-    """Generate music clip and add to timeline"""
+# Helper functions for JSON string State management
+def parse_timeline_state(state_str: str):
+    """Parse JSON string State to dict"""
     try:
-        # Restore timeline from state
-        if 'clips' in timeline_state:
+        if not state_str or state_str.strip() == '':
+            return {'clips': []}
+        return json.loads(state_str)
+    except Exception as e:
+        logger.error(f"Error parsing timeline state: {e}")
+        return {'clips': []}
+
+def serialize_timeline_state(state_dict):
+    """Convert dict to JSON string State"""
+    try:
+        return json.dumps(state_dict)
+    except Exception as e:
+        logger.error(f"Error serializing timeline state: {e}")
+        return '{"clips": []}'
+
+def restore_timeline_from_state(state_dict):
+    """Restore timeline service from dict"""
+    try:
+        if state_dict and 'clips' in state_dict:
             timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
+            for clip_data in state_dict['clips']:
                 from models.schemas import TimelineClip
                 clip = TimelineClip(**clip_data)
                 timeline_service.clips.append(clip)
             logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips from state")
+        else:
+            logger.warning(f"[STATE] No clips in state to restore")
+    except Exception as e:
+        logger.error(f"Error restoring timeline from state: {e}", exc_info=True)
+
+def save_timeline_to_state():
+    """Save timeline to dict"""
+    return {
+        'clips': [{
+            'clip_id': c.clip_id,
+            'file_path': c.file_path,
+            'duration': c.duration,
+            'timeline_position': c.timeline_position,
+            'start_time': c.start_time,
+            'music_path': c.music_path
+        } for c in timeline_service.clips]
+    }
+
+@GPU_DECORATOR(duration=180)
+def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, context_length: int, use_lora: bool, selected_lora: str, timeline_state: str, progress=gr.Progress()):
+    """Generate music clip and add to timeline"""
+    try:
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
         
         if not prompt or not prompt.strip():
             return "❌ Please enter a music prompt", get_timeline_display(), None, timeline_state
@@ -341,11 +387,27 @@ def generate_music(prompt: str, lyrics: str, lyrics_mode: str, position: str, co
         }
         logger.info(f"[STATE] Saved {len(new_state['clips'])} clips to state")
         
-        return status_msg, get_timeline_display(), final_path, new_state
+        return status_msg, get_timeline_display(), final_path, serialize_timeline_state(new_state)
         
     except Exception as e:
         logger.error(f"Error generating music: {e}", exc_info=True)
-        return f"❌ Error: {str(e)}", get_timeline_display(), None, timeline_state
+        
+        # Check if it's a ZeroGPU quota error
+        error_str = str(e)
+        if "ZeroGPU quota" in error_str or "running out of daily" in error_str:
+            error_msg = (
+                "❌ ZeroGPU Quota Issue\n\n"
+                "🔑 This Space requires authentication to access GPU resources.\n\n"
+                "💡 Solutions:\n"
+                "1. Make sure you're logged into HuggingFace\n"
+                "2. If you're logged in but still see this, try duplicating this Space to your account\n"
+                "3. Free tier users: Check your daily GPU quota at https://huggingface.co/settings/billing\n\n"
+                f"Technical details: {error_str}"
+            )
+        else:
+            error_msg = f"❌ Error: {str(e)}"
+        
+        return error_msg, get_timeline_display(), None, timeline_state
 
 def get_timeline_display():
     """Get timeline clips as HTML visualization with waveform-style display"""
@@ -415,16 +477,12 @@ def get_timeline_display():
     
     return html
 
-def remove_clip(clip_number: int, timeline_state: dict):
+def remove_clip(clip_number: int, timeline_state: str):
     """Remove a clip from timeline"""
     try:
-        # Restore timeline from state
-        if 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
         
         clips = timeline_service.get_all_clips()
         
@@ -438,48 +496,31 @@ def remove_clip(clip_number: int, timeline_state: dict):
         timeline_service.remove_clip(clip_id)
         
         # Save updated state
-        new_state = {
-            'clips': [{
-                'clip_id': c.clip_id,
-                'file_path': c.file_path,
-                'duration': c.duration,
-                'timeline_position': c.timeline_position,
-                'start_time': c.start_time,
-                'music_path': c.music_path
-            } for c in timeline_service.clips]
-        }
+        new_state = save_timeline_to_state()
         
-        return f"✅ Clip {clip_number} removed", get_timeline_display(), new_state
+        return f"✅ Clip {clip_number} removed", get_timeline_display(), serialize_timeline_state(new_state)
         
     except Exception as e:
         logger.error(f"Error removing clip: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", get_timeline_display(), timeline_state
 
-def clear_timeline(timeline_state: dict):
+def clear_timeline(timeline_state: str):
     """Clear all clips from timeline"""
     try:
         timeline_service.clear()
         new_state = {'clips': []}
-        return "✅ Timeline cleared", get_timeline_display(), new_state
+        return "✅ Timeline cleared", get_timeline_display(), serialize_timeline_state(new_state)
     except Exception as e:
         logger.error(f"Error clearing timeline: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", get_timeline_display(), timeline_state
 
-def export_timeline(filename: str, export_format: str, timeline_state: dict, progress=gr.Progress()):
+def export_timeline(filename: str, export_format: str, timeline_state: str, progress=gr.Progress()):
     """Export timeline to audio file"""
     try:
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for export")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for export")
         
         clips = timeline_service.get_all_clips()
         
@@ -510,25 +551,15 @@ def export_timeline(filename: str, export_format: str, timeline_state: dict, pro
         logger.error(f"Error exporting: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", None, timeline_state
 
-def get_timeline_playback(timeline_state: dict):
+def get_timeline_playback(timeline_state: str):
     """Get merged timeline audio for playback"""
     try:
-        logger.info(f"[PLAYBACK] get_timeline_playback called with state: {timeline_state is not None}")
+        logger.info(f"[PLAYBACK] get_timeline_playback called")
         
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[PLAYBACK] Restored {len(timeline_service.clips)} clips from state")
-        else:
-            logger.warning(f"[PLAYBACK] No valid timeline_state provided: {timeline_state}")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[PLAYBACK] Restored {len(timeline_service.clips)} clips from state")
         
         clips = timeline_service.get_all_clips()
         logger.info(f"[PLAYBACK] Total clips in timeline: {len(clips)}")
@@ -611,20 +642,12 @@ def update_preset_description(preset_select_value: str):
         logger.error(f"Error updating preset description: {e}")
         return "Error loading preset description"
 
-def preview_mastering_preset(preset_name: str, timeline_state: dict):
+def preview_mastering_preset(preset_name: str, timeline_state: str):
     """Preview mastering preset on the most recent clip"""
     try:
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
         
         clips = timeline_service.get_all_clips()
         if not clips:
@@ -661,27 +684,15 @@ def preview_mastering_preset(preset_name: str, timeline_state: dict):
         logger.error(f"Error creating preview: {e}", exc_info=True)
         return None, f"❌ Preview error: {str(e)}"
 
-def apply_mastering_preset(preset_name: str, timeline_state: dict):
+def apply_mastering_preset(preset_name: str, timeline_state: str):
     """Apply mastering preset to all clips in timeline"""
     try:
         logger.info(f"[STATE DEBUG] apply_mastering_preset called")
-        logger.info(f"[STATE DEBUG] timeline_state type: {type(timeline_state)}")
-        logger.info(f"[STATE DEBUG] timeline_state value: {timeline_state}")
         
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for mastering")
-        else:
-            logger.warning(f"[STATE DEBUG] State restoration failed - timeline_state is None or missing 'clips' key")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for mastering")
         
         clips = timeline_service.get_all_clips()
         logger.info(f"[MASTERING DEBUG] Retrieved {len(clips)} clips from timeline")
@@ -725,20 +736,12 @@ def apply_mastering_preset(preset_name: str, timeline_state: dict):
         logger.error(f"Error applying preset: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", timeline_state
 
-def preview_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_state: dict):
+def preview_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_state: str):
     """Preview custom EQ on the most recent clip"""
     try:
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
         
         clips = timeline_service.get_all_clips()
         if not clips:
@@ -781,27 +784,15 @@ def preview_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_st
         logger.error(f"Error creating EQ preview: {e}", exc_info=True)
         return None, f"❌ Preview error: {str(e)}"
 
-def apply_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_state: dict):
+def apply_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_state: str):
     """Apply custom EQ to all clips in timeline"""
     try:
         logger.info(f"[STATE DEBUG] apply_custom_eq called")
-        logger.info(f"[STATE DEBUG] timeline_state type: {type(timeline_state)}")
-        logger.info(f"[STATE DEBUG] timeline_state value: {timeline_state}")
         
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for EQ")
-        else:
-            logger.warning(f"[STATE DEBUG] State restoration failed - timeline_state is None or missing 'clips' key")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for EQ")
         
         clips = timeline_service.get_all_clips()
         logger.info(f"[EQ DEBUG] Retrieved {len(clips)} clips from timeline")
@@ -850,23 +841,15 @@ def apply_custom_eq(low_shelf, low_mid, mid, high_mid, high_shelf, timeline_stat
         logger.error(f"Error applying EQ: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", timeline_state
 
-def enhance_timeline_clips(enhancement_level: str, timeline_state: dict):
+def enhance_timeline_clips(enhancement_level: str, timeline_state: str):
     """Enhance all clips in timeline using stem separation"""
     try:
         logger.info(f"[ENHANCEMENT] Starting enhancement: level={enhancement_level}")
         
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for enhancement")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for enhancement")
         
         clips = timeline_service.get_all_clips()
         
@@ -912,23 +895,15 @@ def enhance_timeline_clips(enhancement_level: str, timeline_state: dict):
         logger.error(f"Enhancement failed: {e}", exc_info=True)
         return f"❌ Error: {str(e)}", timeline_state
 
-def upscale_timeline_clips(upscale_mode: str, timeline_state: dict):
+def upscale_timeline_clips(upscale_mode: str, timeline_state: str):
     """Upscale all clips in timeline to 48kHz"""
     try:
         logger.info(f"[UPSCALE] Starting upscale: mode={upscale_mode}")
         
-        # Initialize timeline state if None
-        if timeline_state is None:
-            timeline_state = {'clips': []}
-        
-        # Restore timeline from state
-        if timeline_state and 'clips' in timeline_state:
-            timeline_service.clips = []
-            for clip_data in timeline_state['clips']:
-                from models.schemas import TimelineClip
-                clip = TimelineClip(**clip_data)
-                timeline_service.clips.append(clip)
-            logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for upscale")
+        # Parse and restore state
+        state_dict = parse_timeline_state(timeline_state)
+        restore_timeline_from_state(state_dict)
+        logger.info(f"[STATE] Restored {len(timeline_service.clips)} clips for upscale")
         
         clips = timeline_service.get_all_clips()
         
@@ -990,8 +965,15 @@ def analyze_user_audio(audio_files, split_clips, separate_stems):
         
         results = []
         for audio_file in audio_files:
-            # Analyze audio
+            # Analyze audio (will use embedded metadata when available)
             metadata = analyzer.analyze_audio(audio_file.name)
+            
+            # Use description from embedded metadata if available
+            description = metadata.get('description', '')
+            if not description and 'title' in metadata and 'artist' in metadata:
+                description = f"{metadata['title']} by {metadata['artist']}"
+            elif not description and 'title' in metadata:
+                description = metadata['title']
             
             # Add to results
             results.append([
@@ -1001,7 +983,7 @@ def analyze_user_audio(audio_files, split_clips, separate_stems):
                 metadata.get('key', 'C major'),
                 metadata.get('energy', 'medium'),
                 '',  # Instruments (user fills in)
-                ''   # Description (user fills in)
+                description  # Use embedded description if available
             ])
         
         status = f"✅ Analyzed {len(results)} file(s)"
@@ -1014,28 +996,31 @@ def analyze_user_audio(audio_files, split_clips, separate_stems):
 def ai_generate_all_metadata(metadata_table):
     """AI generate metadata for all files in table"""
     try:
-        if not metadata_table:
+        if metadata_table is None or len(metadata_table) == 0:
             return "❌ No files in metadata table"
+        
+        import pandas as pd
         
         # This is a placeholder - would use actual AI model
         # For now, return sample metadata
         updated_table = []
-        for row in metadata_table:
-            if row and row[0]:  # If filename exists
+        for idx in range(len(metadata_table)):
+            row = metadata_table.iloc[idx]
+            if row['File']:  # If filename exists
                 updated_table.append([
-                    row[0],  # Filename
-                    row[1] if row[1] else "pop",  # Genre
-                    row[2] if row[2] else 120,     # BPM
-                    row[3] if row[3] else "C major",  # Key
-                    row[4] if row[4] else "energetic",  # Mood
+                    row['File'],  # Filename
+                    row['Genre'] if row['Genre'] else "pop",  # Genre
+                    row['BPM'] if row['BPM'] else 120,     # BPM
+                    row['Key'] if row['Key'] else "C major",  # Key
+                    row['Mood'] if row['Mood'] else "energetic",  # Mood
                     "synth, drums, bass",  # Instruments
-                    f"AI-generated music in {row[1] if row[1] else 'unknown'} style"  # Description
+                    f"AI-generated music in {row['Genre'] if row['Genre'] else 'unknown'} style"  # Description
                 ])
         
         return f"✅ Generated metadata for {len(updated_table)} file(s)"
         
     except Exception as e:
-        logger.error(f"Metadata generation failed: {e}")
+        logger.error(f"Metadata generation failed: {e}", exc_info=True)
         return f"❌ Error: {str(e)}"
 
 def check_downloaded_datasets():
@@ -1362,9 +1347,11 @@ def refresh_dataset_status():
         ])
     )
 
-def prepare_user_training_dataset(audio_files, metadata_table, split_clips, separate_stems):
-    """Prepare user audio dataset for training"""
+def prepare_user_training_dataset(audio_files, metadata_table, split_clips, separate_stems, append_to_existing=False, existing_dataset=None, continue_training=False, base_lora_name=None):
+    """Prepare user audio dataset for training or append to existing dataset"""
     try:
+        logger.info(f"prepare_user_training_dataset called with: audio_files type={type(audio_files)}, value={audio_files if not isinstance(audio_files, list) else f'list of {len(audio_files)} items'}, metadata_table type={type(metadata_table)}")
+        
         if not audio_files:
             return "❌ No audio files uploaded"
         
@@ -1377,27 +1364,64 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
         analyzer = AudioAnalysisService()
         dataset_service = DatasetService()
         
-        # Create persistent user dataset directory
-        timestamp = int(time.time())
-        dataset_name = f"user_dataset_{timestamp}"
-        dataset_dir = Path("training_data") / dataset_name
+        # Validate append mode
+        if append_to_existing:
+            if not existing_dataset or existing_dataset.startswith("⚠️") or existing_dataset.startswith("❌"):
+                return "❌ Cannot append: No valid dataset selected\n\n💡 To append files:\n1. First create a dataset by preparing audio without 'Add to existing dataset' checked\n2. Then upload new files and select that dataset to append to"
+        
+        # Determine dataset name and directory
+        if append_to_existing and existing_dataset:
+            # Append to existing dataset
+            dataset_name = existing_dataset.split(" (")[0].strip()
+            dataset_dir = Path("training_data") / dataset_name
+            if not dataset_dir.exists():
+                return f"❌ Dataset not found: {dataset_name}\n💡 The dataset may have been deleted or moved."
+            is_appending = True
+        else:
+            # Create new dataset directory
+            timestamp = int(time.time())
+            if continue_training and base_lora_name:
+                # Name dataset to indicate continuation
+                clean_lora_name = base_lora_name.replace("[Local] ", "").replace("[HF] ", "")
+                dataset_name = f"{clean_lora_name}_continue_{timestamp}"
+            else:
+                dataset_name = f"user_dataset_{timestamp}"
+            dataset_dir = Path("training_data") / dataset_name
+            is_appending = False
+        
         audio_dir = dataset_dir / "audio"
         audio_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Processing {len(audio_files)} audio files with metadata_table={metadata_table}")
         
         # Process audio files
         processed_files = []
         processed_metadata = []
         
         for i, audio_file in enumerate(audio_files):
+            logger.info(f"Processing file {i+1}/{len(audio_files)}: {audio_file.name if hasattr(audio_file, 'name') else audio_file}")
+            
             # Get metadata from table
-            if metadata_table and i < len(metadata_table):
+            has_metadata = metadata_table is not None and len(metadata_table) > 0 and i < len(metadata_table)
+            
+            # Additional check: verify row has actual data (not just empty cells)
+            row_data = None
+            if has_metadata:
+                row_data = metadata_table.iloc[i]
+                # Check if the row has a filename (first non-empty indicator)
+                has_metadata = bool(row_data['File'])
+            
+            logger.info(f"has_metadata={has_metadata}, metadata_table length={len(metadata_table) if metadata_table is not None else 'None'}")
+            
+            if has_metadata and row_data is not None:
+                # Access DataFrame using the row we already retrieved
                 file_metadata = {
-                    'genre': metadata_table[i][1],
-                    'bpm': int(metadata_table[i][2]) if metadata_table[i][2] else 120,
-                    'key': metadata_table[i][3],
-                    'mood': metadata_table[i][4],
-                    'instrumentation': metadata_table[i][5],
-                    'description': metadata_table[i][6]
+                    'genre': row_data['Genre'] if row_data['Genre'] else 'unknown',
+                    'bpm': int(row_data['BPM']) if row_data['BPM'] and row_data['BPM'] != '' else 120,
+                    'key': row_data['Key'] if row_data['Key'] else 'C major',
+                    'mood': row_data['Mood'] if row_data['Mood'] else 'medium',
+                    'instrumentation': row_data['Instruments'] if row_data['Instruments'] else '',
+                    'description': row_data['Description'] if row_data['Description'] else ''
                 }
             else:
                 # Analyze if no metadata
@@ -1411,19 +1435,37 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
             processed_files.append(str(dest_path))
             processed_metadata.append(file_metadata)
         
+        # Load existing dataset info if appending
+        metadata_path = dataset_dir / 'dataset_info.json'
+        existing_dataset_info = None
+        if is_appending and metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                existing_dataset_info = json.load(f)
+            # Append to existing files
+            existing_files = existing_dataset_info.get('train_files', []) + existing_dataset_info.get('val_files', [])
+            existing_metadata = existing_dataset_info.get('train_metadata', []) + existing_dataset_info.get('val_metadata', [])
+            all_files = existing_files + processed_files
+            all_metadata = existing_metadata + processed_metadata
+        else:
+            all_files = processed_files
+            all_metadata = processed_metadata
+        
         # Split into train/val
-        num_train = int(len(processed_files) * 0.9)
-        train_files = processed_files[:num_train]
-        val_files = processed_files[num_train:]
-        train_metadata = processed_metadata[:num_train]
-        val_metadata = processed_metadata[num_train:]
+        num_train = int(len(all_files) * 0.9)
+        train_files = all_files[:num_train]
+        val_files = all_files[num_train:]
+        train_metadata = all_metadata[:num_train]
+        val_metadata = all_metadata[num_train:]
         
         # Save dataset metadata
         dataset_info = {
             'dataset_name': dataset_name,
             'dataset_key': dataset_name,
             'is_user_dataset': True,
-            'created_date': datetime.now().isoformat(),
+            'continue_training': continue_training,
+            'base_lora': base_lora_name if continue_training else None,
+            'created_date': existing_dataset_info.get('created_date', datetime.now().isoformat()) if existing_dataset_info else datetime.now().isoformat(),
+            'last_updated': datetime.now().isoformat(),
             'prepared': True,
             'num_train_samples': len(train_files),
             'num_val_samples': len(val_files),
@@ -1434,15 +1476,22 @@ def prepare_user_training_dataset(audio_files, metadata_table, split_clips, sepa
             'train_val_split': 0.9
         }
         
-        metadata_path = dataset_dir / 'dataset_info.json'
         with open(metadata_path, 'w') as f:
             json.dump(dataset_info, f, indent=2)
         
-        return f"✅ Prepared user dataset '{dataset_name}' with {len(processed_files)} samples ({len(train_files)} train, {len(val_files)} val)\n📁 Saved to: {dataset_dir}"
+        if is_appending:
+            result_msg = f"✅ Added {len(processed_files)} samples to dataset '{dataset_name}'\n📊 Total: {len(all_files)} samples ({len(train_files)} train, {len(val_files)} val)\n📁 Location: {dataset_dir}"
+        else:
+            result_msg = f"✅ Prepared user dataset '{dataset_name}' with {len(processed_files)} samples ({len(train_files)} train, {len(val_files)} val)\n📁 Saved to: {dataset_dir}"
+        
+        if continue_training and base_lora_name:
+            result_msg += f"\n\n🔄 This dataset is set to continue training from: {base_lora_name}\n💡 Use the 'Training Configuration' tab and select this dataset to start training."
+        
+        return result_msg
         
     except Exception as e:
-        logger.error(f"Dataset preparation failed: {e}")
-        return f"❌ Error: {str(e)}"
+        logger.error(f"Dataset preparation failed: {e}", exc_info=True)
+        return f"❌ Error: {str(e)}\n\n🔍 Check the logs for detailed error information"
 
 def refresh_dataset_list():
     """Refresh list of available datasets for training"""
@@ -1464,30 +1513,54 @@ def refresh_dataset_list():
         if not prepared_datasets:
             prepared_datasets = ["No prepared datasets available"]
         
-        return gr.Dropdown(choices=prepared_datasets, value=prepared_datasets[0] if prepared_datasets else None)
+        # Return two dropdowns with same choices
+        # First for training, second for appending
+        default_value = prepared_datasets[0] if prepared_datasets and prepared_datasets[0] != "No prepared datasets available" else None
+        return gr.Dropdown(choices=prepared_datasets, value=default_value), gr.Dropdown(choices=prepared_datasets, value=None, visible=False)
         
     except Exception as e:
         logger.error(f"Failed to refresh datasets: {e}")
         return gr.Dropdown(choices=["Error loading datasets"])
 
 def auto_populate_lora_name(dataset):
-    """Auto-populate LoRA name based on selected dataset"""
+    """Auto-populate LoRA name based on selected dataset, and auto-configure continue training if applicable"""
     try:
         if not dataset or dataset == "No prepared datasets available" or dataset == "Error loading datasets":
-            return ""
+            return "", gr.update(), gr.update()
         
         # Extract dataset key from display name
         dataset_key = dataset.split(" (")[0].strip()
+        
+        # Check if this dataset is set for continue training
+        from pathlib import Path
+        import json
+        
+        dataset_dir = Path("training_data") / dataset_key
+        metadata_path = dataset_dir / 'dataset_info.json'
+        
+        use_base_lora = False
+        base_lora_value = None
+        
+        if metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                dataset_info = json.load(f)
+            
+            # Check if this dataset is for continue training
+            if dataset_info.get('continue_training') and dataset_info.get('base_lora'):
+                use_base_lora = True
+                base_lora_value = dataset_info['base_lora']
         
         # Generate versioned name
         import time
         timestamp = int(time.time()) % 10000  # Last 4 digits of timestamp
         lora_name = f"{dataset_key}_v1_{timestamp}"
         
-        return lora_name
+        # Return: lora_name, use_existing_lora checkbox, base_lora_adapter dropdown
+        return lora_name, gr.update(value=use_base_lora), gr.update(value=base_lora_value)
+        
     except Exception as e:
         logger.error(f"Failed to auto-populate LoRA name: {e}")
-        return ""
+        return "", gr.update(), gr.update()
 
 def load_lora_for_training(lora_name):
     """Load a LoRA adapter's configuration for continued training"""
@@ -1574,7 +1647,7 @@ def download_lora_from_hf(lora_path_or_id):
         logger.error(f"Failed to download LoRA from HF: {e}", exc_info=True)
         return f"❌ Error: {str(e)}"
 
-def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha):
+def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha, use_base_lora, base_lora):
     """Start LoRA training"""
     try:
         if not lora_name:
@@ -1589,13 +1662,36 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
         # Extract dataset key from display name (format: "dataset_key (N samples)")
         dataset_key = dataset.split(" (")[0].strip()
         
+        # Handle base LoRA if continuing training
+        base_lora_path = None
+        if use_base_lora and base_lora:
+            # Extract LoRA name from dropdown selection (format: "[Local] name" or "[HF] name")
+            if base_lora.startswith('[Local] '):
+                base_lora_name = base_lora.replace('[Local] ', '')
+                base_lora_path = str(Path('models/loras') / base_lora_name)
+                logger.info(f"Continuing training from local LoRA: {base_lora_path}")
+            elif base_lora.startswith('[HF] '):
+                base_lora_name = base_lora.replace('[HF] ', '')
+                # Download from HuggingFace if needed
+                target_dir = Path('models/loras') / base_lora_name
+                if not target_dir.exists():
+                    logger.info(f"Downloading base LoRA from HF: {base_lora_name}")
+                    if hf_storage.download_lora(f"loras/{base_lora_name}", target_dir):
+                        base_lora_path = str(target_dir)
+                    else:
+                        return f"❌ Failed to download base LoRA: {base_lora_name}", ""
+                else:
+                    base_lora_path = str(target_dir)
+                    logger.info(f"Using downloaded HF LoRA: {base_lora_path}")
+        
         # Training config
         config = {
             'batch_size': int(batch_size),
             'learning_rate': float(learning_rate),
             'num_epochs': int(num_epochs),
             'lora_rank': int(lora_rank),
-            'lora_alpha': int(lora_alpha)
+            'lora_alpha': int(lora_alpha),
+            'base_lora_path': base_lora_path  # Add base LoRA path to config
         }
         
         # Progress callback
@@ -1607,8 +1703,13 @@ def start_lora_training(lora_name, dataset, batch_size, learning_rate, num_epoch
             return "\n".join(progress_log[-20:])  # Last 20 lines
         
         # Start training
-        progress = f"🚀 Starting training: {lora_name}\nDataset: {dataset_key}\nConfig: {config}\n\n"
+        progress = f"🚀 Starting training: {lora_name}\nDataset: {dataset_key}\n"
+        if base_lora_path:
+            progress += f"📂 Base LoRA: {base_lora}\n"
+        progress += f"Config: {config}\n\n"
         log = "Training started...\n"
+        if base_lora_path:
+            log += f"Continuing from base LoRA: {base_lora_path}\n"
         
         # Note: In production, this should run in a background thread
         # For now, this is a simplified synchronous version
@@ -1693,12 +1794,26 @@ def refresh_lora_list():
             ])
             lora_names.append(adapter.get('name', ''))
         
-        # Return table data and update both dropdowns (action dropdown and base_lora dropdown)
-        return table_data, gr.Dropdown(choices=lora_names), gr.Dropdown(choices=lora_names)
+        # Return table data and update dropdowns (action dropdown, base_lora dropdown, and user_base_lora dropdown)
+        return table_data, gr.Dropdown(choices=lora_names), gr.Dropdown(choices=lora_names), gr.Dropdown(choices=lora_names)
         
     except Exception as e:
         logger.error(f"Failed to refresh LoRA list: {e}")
-        return [], gr.Dropdown(choices=[]), gr.Dropdown(choices=[])
+        return [], gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), gr.Dropdown(choices=[])
+
+def get_available_loras():
+    """Get list of available LoRA adapter names"""
+    try:
+        from backend.services.lora_training_service import LoRATrainingService
+        lora_service = LoRATrainingService()
+        
+        adapters = lora_service.list_lora_adapters()
+        lora_names = [adapter.get('name', '') for adapter in adapters if adapter.get('name')]
+        
+        return lora_names
+    except Exception as e:
+        logger.error(f"Failed to get available LoRAs: {e}")
+        return []
 
 def delete_lora(lora_name):
     """Delete selected LoRA adapter"""
@@ -1762,49 +1877,77 @@ def upload_lora(zip_file):
         return f"❌ Error: {str(e)}"
 
 def toggle_base_lora(use_existing):
-    """Toggle visibility and populate base LoRA adapter dropdown with local and HF LoRAs"""
+    """Toggle visibility of base LoRA dropdown and populate choices"""
     if not use_existing:
-        return gr.Dropdown(visible=False, choices=[])
+        return gr.update(visible=False)
     
+    # Get available LoRAs when showing dropdown
     try:
-        all_loras = []
+        lora_choices = get_available_loras()
         
-        # Get local installed LoRA adapters
-        from backend.services.lora_training_service import LoRATrainingService
-        lora_service = LoRATrainingService()
-        local_adapters = lora_service.list_lora_adapters()
+        if not lora_choices:
+            return gr.update(
+                visible=True,
+                choices=["⚠️ No LoRAs available"],
+                value="⚠️ No LoRAs available",
+                interactive=False
+            )
         
-        for adapter in local_adapters:
-            name = adapter.get('name', '')
-            if name:
-                all_loras.append(f"[Local] {name}")
-        
-        # Get LoRAs from HuggingFace dataset repo
-        try:
-            from backend.services.hf_storage_service import HFStorageService
-            hf_storage = HFStorageService()
-            hf_loras = hf_storage.list_dataset_loras()
-            
-            for lora_info in hf_loras:
-                name = lora_info.get('name', '')
-                if name and name not in [l.replace('[Local] ', '') for l in all_loras]:
-                    all_loras.append(f"[HF] {name}")
-            
-            logger.info(f"Found {len(hf_loras)} LoRAs on HuggingFace")
-        except Exception as e:
-            logger.warning(f"Could not fetch HF LoRAs: {e}")
-        
-        logger.info(f"Total {len(all_loras)} LoRAs available for training")
-        
-        return gr.Dropdown(
+        return gr.update(
             visible=True,
-            choices=all_loras,
-            value=all_loras[0] if all_loras else None
+            choices=lora_choices,
+            value=lora_choices[0] if lora_choices else None,
+            interactive=True
         )
-        
     except Exception as e:
-        logger.error(f"Error loading LoRAs: {e}")
-        return gr.Dropdown(visible=True, choices=[])
+        logger.error(f"Failed to load LoRAs: {e}")
+        return gr.update(
+            visible=True,
+            choices=["❌ Error loading LoRAs"],
+            value="❌ Error loading LoRAs",
+            interactive=False
+        )
+
+def toggle_append_dataset(should_append):
+    """Toggle visibility of existing dataset dropdown with validation"""
+    if not should_append:
+        return gr.update(visible=False)
+    
+    # Get available datasets when showing dropdown
+    try:
+        from backend.services.dataset_service import DatasetService
+        dataset_service = DatasetService()
+        all_datasets = dataset_service.get_all_available_datasets()
+        
+        prepared_datasets = []
+        for key, info in all_datasets.items():
+            if info.get('prepared'):
+                num_samples = info.get('num_train_samples', 0) + info.get('num_val_samples', 0)
+                display_name = f"{key} ({num_samples} samples)"
+                prepared_datasets.append(display_name)
+        
+        if not prepared_datasets:
+            # No datasets available
+            return gr.update(
+                visible=True, 
+                choices=["⚠️ No datasets available - create one first"],
+                value="⚠️ No datasets available - create one first",
+                interactive=False
+            )
+        
+        return gr.update(
+            visible=True, 
+            choices=prepared_datasets,
+            value=None,
+            interactive=True
+        )
+    except Exception as e:
+        return gr.update(
+            visible=True,
+            choices=[f"❌ Error loading datasets: {str(e)}"],
+            value=None,
+            interactive=False
+        )
 
 def export_dataset(dataset_key):
     """Export prepared dataset as zip file"""
@@ -1882,9 +2025,9 @@ with gr.Blocks(
         """
     )
     
-    # Timeline state - persists across GPU context switches
-    # Initialize with empty dict to avoid Gradio schema validation errors
-    timeline_state = gr.State(value={'clips': []})
+    # Timeline state - stored as JSON string to avoid Gradio schema validation errors
+    # Functions will parse/stringify as needed
+    timeline_state = gr.State(value='{"clips": []}')
     
     # Generation Section
     gr.Markdown("### 🎼 Music Generation")
@@ -2410,6 +2553,35 @@ with gr.Blocks(
                 
                 metadata_status = gr.Textbox(label="Metadata Status", lines=1, interactive=False)
                 
+                gr.Markdown("---")
+                gr.Markdown("#### Continue Training Options")
+                
+                with gr.Row():
+                    append_to_dataset = gr.Checkbox(
+                        label="Add to existing dataset",
+                        value=False,
+                        info="Append these files to an existing dataset"
+                    )
+                    existing_dataset_selector = gr.Dropdown(
+                        choices=[],
+                        label="Select Dataset to Append To",
+                        info="Choose which dataset to add files to",
+                        visible=False
+                    )
+                
+                with gr.Row():
+                    user_continue_lora = gr.Checkbox(
+                        label="Continue training from existing LoRA",
+                        value=False,
+                        info="Start from a pre-trained LoRA adapter"
+                    )
+                    user_base_lora = gr.Dropdown(
+                        choices=[],
+                        label="Select LoRA to Continue",
+                        info="Choose which LoRA to start from",
+                        visible=False
+                    )
+                
                 prepare_user_dataset_btn = gr.Button("📦 Prepare Training Dataset", variant="primary")
                 user_prepare_status = gr.Textbox(label="Preparation Status", lines=2, interactive=False)
                 
@@ -2673,9 +2845,21 @@ with gr.Blocks(
         outputs=[metadata_status]
     )
     
+    append_to_dataset.change(
+        fn=toggle_append_dataset,
+        inputs=[append_to_dataset],
+        outputs=[existing_dataset_selector]
+    )
+    
+    user_continue_lora.change(
+        fn=toggle_base_lora,
+        inputs=[user_continue_lora],
+        outputs=[user_base_lora]
+    )
+    
     prepare_user_dataset_btn.click(
         fn=prepare_user_training_dataset,
-        inputs=[user_audio_upload, metadata_table, split_to_clips, separate_stems],
+        inputs=[user_audio_upload, metadata_table, split_to_clips, separate_stems, append_to_dataset, existing_dataset_selector, user_continue_lora, user_base_lora],
         outputs=[user_prepare_status]
     ).then(
         fn=refresh_dataset_status,
@@ -2684,18 +2868,22 @@ with gr.Blocks(
     ).then(
         fn=refresh_dataset_list,
         inputs=[],
-        outputs=[selected_dataset]
+        outputs=[selected_dataset, existing_dataset_selector]
+    ).success(
+        fn=lambda: gr.update(value=False),
+        inputs=[],
+        outputs=[append_to_dataset]
     )
     
     refresh_datasets_btn.click(
         fn=refresh_dataset_list,
         inputs=[],
-        outputs=[selected_dataset]
+        outputs=[selected_dataset, existing_dataset_selector]
     )
     
     start_training_btn.click(
         fn=start_lora_training,
-        inputs=[lora_name_input, selected_dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha],
+        inputs=[lora_name_input, selected_dataset, batch_size, learning_rate, num_epochs, lora_rank, lora_alpha, use_existing_lora, base_lora_adapter],
         outputs=[training_progress, training_log]
     )
     
@@ -2708,7 +2896,7 @@ with gr.Blocks(
     refresh_lora_btn.click(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter, user_base_lora]
     )
     
     delete_lora_btn.click(
@@ -2718,7 +2906,7 @@ with gr.Blocks(
     ).then(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter, user_base_lora]
     )
     
     download_lora_btn.click(
@@ -2734,7 +2922,7 @@ with gr.Blocks(
     ).then(
         fn=refresh_lora_list,
         inputs=[],
-        outputs=[lora_list, selected_lora_for_action, base_lora_adapter]
+        outputs=[lora_list, selected_lora_for_action, base_lora_adapter, user_base_lora]
     )
     
     use_existing_lora.change(
@@ -2747,7 +2935,7 @@ with gr.Blocks(
     selected_dataset.change(
         fn=auto_populate_lora_name,
         inputs=[selected_dataset],
-        outputs=[lora_name_input]
+        outputs=[lora_name_input, use_existing_lora, base_lora_adapter]
     )
     
     # Load LoRA config when existing LoRA is selected for continued training

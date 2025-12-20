@@ -44,6 +44,7 @@ omegaconf>=2.3.0
 pedalboard>=0.7.0
 pydub>=0.25.1
 resampy>=0.4.2
+mutagen>=1.47.0
 
 # Audio quality enhancement
 demucs==4.0.1  # Stem separation
