@@ -45,6 +45,7 @@ mutagen>=1.47.0
 tqdm>=4.65.0
 huggingface-hub>=0.17.0
 safetensors>=0.3.0
+h5py>=3.10.0  # MSD integration (v1.0.2)
 
 # System dependencies note:
 # espeak-ng is required by phonemizer and should be installed via packages.txt

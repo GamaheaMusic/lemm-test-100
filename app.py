@@ -98,22 +98,33 @@ os.makedirs("logs", exist_ok=True)
 timeline_service = TimelineService()
 export_service = ExportService()
 
-# Initialize MSD services
-try:
-    from services.msd_database_service import MSDDatabaseService
-    from services.genre_profiler import GenreProfiler
-    from services.msd_importer import MSDSubsetImporter
+# Initialize MSD services (lazy loading to avoid startup issues)
+msd_db_service = None
+genre_profiler = None
+msd_importer = None
+
+def initialize_msd_services():
+    """Lazy initialization of MSD services"""
+    global msd_db_service, genre_profiler, msd_importer
     
-    msd_db_service = MSDDatabaseService()
-    genre_profiler = GenreProfiler()
-    msd_importer = MSDSubsetImporter()
+    if msd_db_service is not None:
+        return  # Already initialized
     
-    logger.info("✅ MSD services initialized successfully")
-except Exception as e:
-    logger.warning(f"⚠️ MSD services not available: {e}")
-    msd_db_service = None
-    genre_profiler = None
-    msd_importer = None
+    try:
+        from services.msd_database_service import MSDDatabaseService
+        from services.genre_profiler import GenreProfiler
+        from services.msd_importer import MSDSubsetImporter
+        
+        msd_db_service = MSDDatabaseService()
+        genre_profiler = GenreProfiler()
+        msd_importer = MSDSubsetImporter()
+        
+        logger.info("✅ MSD services initialized successfully")
+    except Exception as e:
+        logger.warning(f"⚠️ MSD services not available: {e}")
+        msd_db_service = None
+        genre_profiler = None
+        msd_importer = None
 
 # Initialize HF storage for LoRA uploads to dataset repo
 hf_storage = HFStorageService(username="Gamahea", dataset_repo="lemmdata")
@@ -2035,6 +2046,8 @@ def refresh_export_dataset_list():
 # MSD Genre Suggestion Functions
 def get_available_genres():
     """Get list of available genres from MSD database"""
+    initialize_msd_services()
+    
     if not genre_profiler:
         return []
     
@@ -2047,6 +2060,8 @@ def get_available_genres():
 
 def suggest_parameters_for_genre(genre: str):
     """Get parameter suggestions based on genre profile"""
+    initialize_msd_services()
+    
     if not genre_profiler or not genre:
         return "Select a genre to see parameter suggestions", "", ""
     
@@ -2089,6 +2104,8 @@ def suggest_parameters_for_genre(genre: str):
 
 def import_msd_sample_data(count: int = 1000):
     """Import sample MSD data for testing"""
+    initialize_msd_services()
+    
     if not msd_importer:
         return "❌ MSD services not available"
     
@@ -2115,6 +2132,8 @@ Database is ready for genre-based parameter suggestions!
 
 def get_msd_database_stats():
     """Get current MSD database statistics"""
+    initialize_msd_services()
+    
     if not msd_db_service:
         return "MSD services not available"
     
