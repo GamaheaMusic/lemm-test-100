@@ -2,7 +2,7 @@
 flask>=3.0.0
 flask-cors>=4.0.0
 gradio>=4.0.0
-huggingface-hub>=0.20.0  # For HF dataset repo storage
+huggingface-hub==0.24.0  # Required by transformers 4.47.1
 numpy>=1.24.0
 scipy>=1.10.0
 librosa>=0.10.0
@@ -61,6 +61,5 @@ tensorboard==2.16.2  # Training monitoring and visualization
 wandb==0.17.0  # Optional: Advanced experiment tracking
 
 # Utilities
-huggingface-hub==0.23.0
 safetensors==0.4.3
 gitpython==3.1.43
