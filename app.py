@@ -2068,17 +2068,24 @@ def refresh_export_dataset_list():
 # MSD Genre Suggestion Functions
 def get_available_genres():
     """Get list of available genres from MSD database"""
-    initialize_msd_services()
-    
-    if not genre_profiler:
-        return []
+    # Default genres (available even before importing sample data)
+    default_genres = [
+        "rock", "pop", "electronic", "jazz", "classical",
+        "metal", "hip-hop", "country", "blues", "folk"
+    ]
     
     try:
+        initialize_msd_services()
+        
+        if not genre_profiler:
+            return default_genres
+        
         genres = genre_profiler.get_all_genre_names()
-        return genres if genres else []
+        # Return database genres if available, otherwise use defaults
+        return genres if genres else default_genres
     except Exception as e:
         logger.error(f"Failed to get genres: {e}")
-        return []
+        return default_genres
 
 def suggest_parameters_for_genre(genre: str):
     """Get parameter suggestions based on genre profile"""
