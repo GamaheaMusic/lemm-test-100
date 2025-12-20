@@ -98,6 +98,23 @@ os.makedirs("logs", exist_ok=True)
 timeline_service = TimelineService()
 export_service = ExportService()
 
+# Initialize MSD services
+try:
+    from services.msd_database_service import MSDDatabaseService
+    from services.genre_profiler import GenreProfiler
+    from services.msd_importer import MSDSubsetImporter
+    
+    msd_db_service = MSDDatabaseService()
+    genre_profiler = GenreProfiler()
+    msd_importer = MSDSubsetImporter()
+    
+    logger.info("✅ MSD services initialized successfully")
+except Exception as e:
+    logger.warning(f"⚠️ MSD services not available: {e}")
+    msd_db_service = None
+    genre_profiler = None
+    msd_importer = None
+
 # Initialize HF storage for LoRA uploads to dataset repo
 hf_storage = HFStorageService(username="Gamahea", dataset_repo="lemmdata")
 logger.info("🔍 Checking HuggingFace dataset repo for LoRAs...")
@@ -2015,6 +2032,120 @@ def refresh_export_dataset_list():
         logger.error(f"Failed to refresh export list: {e}")
         return gr.Dropdown(choices=[])
 
+# MSD Genre Suggestion Functions
+def get_available_genres():
+    """Get list of available genres from MSD database"""
+    if not genre_profiler:
+        return []
+    
+    try:
+        genres = genre_profiler.get_all_genre_names()
+        return genres if genres else []
+    except Exception as e:
+        logger.error(f"Failed to get genres: {e}")
+        return []
+
+def suggest_parameters_for_genre(genre: str):
+    """Get parameter suggestions based on genre profile"""
+    if not genre_profiler or not genre:
+        return "Select a genre to see parameter suggestions", "", ""
+    
+    try:
+        suggestions = genre_profiler.suggest_parameters_for_genre(genre)
+        
+        if not suggestions:
+            return f"No profile data available for genre: {genre}", "", ""
+        
+        # Format suggestions
+        info_text = f"""
+### 🎵 Genre Profile: {genre.title()}
+
+**Tempo (BPM):** {suggestions.get('tempo_bpm', 'N/A')} BPM
+**Recommended Range:** {suggestions['tempo_range']['min']:.0f} - {suggestions['tempo_range']['max']:.0f} BPM
+
+**Common Keys:** {', '.join(suggestions.get('recommended_keys', ['N/A']))}
+**Preferred Mode:** {suggestions.get('recommended_mode', 'N/A')}
+
+**Energy Level:** {suggestions.get('energy_level', 'N/A')}
+**Danceability:** {suggestions.get('danceability', 'N/A')}
+
+💡 *These suggestions are based on analysis of existing {genre} tracks*
+"""
+        
+        # Generate prompt suggestion
+        tempo = suggestions.get('tempo_bpm', 120)
+        mode = 'major' if 'major' in str(suggestions.get('recommended_mode', '')).lower() else 'minor'
+        
+        prompt_suggestion = f"{genre} song at {tempo:.0f} BPM, {mode} key"
+        
+        # BPM value for slider
+        bpm_value = int(tempo)
+        
+        return info_text, prompt_suggestion, bpm_value
+        
+    except Exception as e:
+        logger.error(f"Error getting genre suggestions: {e}")
+        return f"Error: {str(e)}", "", ""
+
+def import_msd_sample_data(count: int = 1000):
+    """Import sample MSD data for testing"""
+    if not msd_importer:
+        return "❌ MSD services not available"
+    
+    try:
+        logger.info(f"Importing {count} sample songs...")
+        result = msd_importer.import_sample_data(count)
+        
+        status = f"""
+✅ Import Complete!
+
+**Songs Imported:** {result['imported']} / {result['total']}
+**Failed:** {result['failed']}
+**Genres Analyzed:** {result['genres_analyzed']}
+**Key-Tempo Patterns:** {result['patterns_saved']}
+
+Database is ready for genre-based parameter suggestions!
+"""
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error importing sample data: {e}")
+        return f"❌ Error: {str(e)}"
+
+def get_msd_database_stats():
+    """Get current MSD database statistics"""
+    if not msd_db_service:
+        return "MSD services not available"
+    
+    try:
+        stats = msd_db_service.get_database_stats()
+        
+        if stats.get('total_songs', 0) == 0:
+            return "Database is empty. Click 'Import Sample Data' to get started."
+        
+        top_genres = stats.get('top_genres', {})
+        genre_list = '\n'.join([f"- {genre}: {count} songs" for genre, count in list(top_genres.items())[:5]])
+        
+        stats_text = f"""
+### 📊 Database Statistics
+
+**Total Songs:** {stats.get('total_songs', 0):,}
+**Unique Genres:** {stats.get('genres_count', 0)}
+
+**Top Genres:**
+{genre_list}
+
+**Tempo Range:** {stats.get('tempo_min', 0):.0f} - {stats.get('tempo_max', 0):.0f} BPM
+**Average Tempo:** {stats.get('tempo_avg', 0):.0f} BPM
+"""
+        
+        return stats_text
+        
+    except Exception as e:
+        logger.error(f"Error getting database stats: {e}")
+        return f"Error: {str(e)}"
+
 # Create Gradio interface
 with gr.Blocks(
     title="LEMM - Let Everyone Make Music v1.0.0 (beta)",
@@ -2043,6 +2174,49 @@ with gr.Blocks(
         lines=3,
         info="Describe the music style, instruments, tempo, and mood"
     )
+    
+    # Genre-based Parameter Suggestions (MSD Integration)
+    with gr.Accordion("🎸 Genre-Based Parameter Suggestions (Beta)", open=False):
+        gr.Markdown("""
+            Get AI-powered parameter suggestions based on analysis of real music!
+            Select a genre to see recommended BPM, keys, and musical characteristics.
+        """)
+        
+        with gr.Row():
+            genre_selector = gr.Dropdown(
+                label="Select Genre",
+                choices=get_available_genres(),
+                value=None,
+                interactive=True
+            )
+            refresh_genres_btn = gr.Button("🔄 Refresh Genres", size="sm")
+        
+        genre_suggestions_output = gr.Markdown(
+            value="Select a genre to see parameter suggestions"
+        )
+        
+        with gr.Row():
+            apply_prompt_btn = gr.Button("Apply to Prompt", size="sm")
+            apply_bpm_btn = gr.Button("Apply BPM", size="sm", visible=False)
+        
+        # Hidden state for BPM value
+        suggested_bpm = gr.Number(value=120, visible=False)
+        
+        with gr.Accordion("📊 Database Management", open=False):
+            with gr.Row():
+                import_sample_btn = gr.Button("Import Sample Data (1000 songs)", size="sm")
+                show_stats_btn = gr.Button("Show Database Stats", size="sm")
+            
+            import_count_slider = gr.Slider(
+                minimum=100,
+                maximum=5000,
+                value=1000,
+                step=100,
+                label="Number of sample songs to import",
+                visible=False
+            )
+            
+            msd_status_output = gr.Markdown(value="")
     
     lyrics_mode = gr.Radio(
         choices=["Instrumental", "User Lyrics", "Auto Lyrics"],
@@ -2317,6 +2491,41 @@ with gr.Blocks(
     )
     
     # Event handlers
+    # Genre Suggestions Event Handlers
+    refresh_genres_btn.click(
+        fn=lambda: gr.Dropdown(choices=get_available_genres()),
+        inputs=[],
+        outputs=[genre_selector]
+    )
+    
+    genre_selector.change(
+        fn=suggest_parameters_for_genre,
+        inputs=[genre_selector],
+        outputs=[genre_suggestions_output, prompt_input, suggested_bpm]
+    )
+    
+    apply_prompt_btn.click(
+        fn=lambda genre_info, current_prompt: current_prompt if not genre_info else genre_info,
+        inputs=[prompt_input, prompt_input],
+        outputs=[prompt_input]
+    )
+    
+    import_sample_btn.click(
+        fn=lambda count: import_msd_sample_data(count),
+        inputs=[import_count_slider],
+        outputs=[msd_status_output]
+    ).then(
+        fn=lambda: gr.Dropdown(choices=get_available_genres()),
+        inputs=[],
+        outputs=[genre_selector]
+    )
+    
+    show_stats_btn.click(
+        fn=get_msd_database_stats,
+        inputs=[],
+        outputs=[msd_status_output]
+    )
+    
     auto_gen_btn.click(
         fn=generate_lyrics,
         inputs=[prompt_input],

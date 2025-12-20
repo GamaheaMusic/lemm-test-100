@@ -48,6 +48,10 @@ mutagen>=1.47.0
 
 # Audio quality enhancement
 demucs==4.0.1  # Stem separation
+
+# MSD Integration (v1.0.2)
+h5py>=3.10.0  # For reading MSD HDF5 files
+tqdm>=4.65.0  # Progress bars for data import
 noisereduce>=3.0.0  # Noise reduction
 audiosr>=0.0.7  # Audio super resolution (upscaling to 48kHz)
 
